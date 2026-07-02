@@ -1,0 +1,21 @@
+{
+  "_comment": "Multi-server manifest — plug-and-play, lazy-loaded. Only 'ai-os-echo' is startable by this repo; the others illustrate stdio (local) and remote (HTTP) shapes.",
+  "mcpServers": {
+    "ai-os-echo": {
+      "transport": "stdio",
+      "command": "python",
+      "args": ["mcp/echo_server/server.py"]
+    },
+    "filesystem": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "./"],
+      "note": "example only — a real, published MCP server"
+    },
+    "github-remote": {
+      "transport": "http",
+      "url": "https://api.githubcopilot.com/mcp/",
+      "note": "remote server; used via the API MCP connector or Claude Code with auth (see api_connector.md)"
+    }
+  }
+}

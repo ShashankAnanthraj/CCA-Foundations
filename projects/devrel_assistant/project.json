@@ -1,0 +1,7 @@
+{
+  "name": "DevRel Assistant",
+  "description": "Answers developer questions using AI-OS product facts and house style.",
+  "model": "claude-opus-4-8",
+  "context": ["context/project/devrel.md"],
+  "skills": ["changelog-writer"]
+}

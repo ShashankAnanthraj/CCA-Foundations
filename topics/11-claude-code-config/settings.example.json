@@ -1,0 +1,25 @@
+{
+  "_comment": "EXAMPLE Claude Code settings — copy the parts you want into .claude/settings.json. Not auto-applied.",
+
+  "permissions": {
+    "allow": ["Read", "Edit", "Bash(python -m compileall*)", "Bash(python topics/*)"],
+    "ask":   ["Bash(git push*)", "Bash(pip install*)"],
+    "deny":  ["Bash(rm -rf*)", "Read(.env)", "Read(./**/*.key)"]
+  },
+
+  "env": { "AI_OS_MAX_TOKENS": "512" },
+
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "python -m compileall -q core providers topics mcp" }
+        ]
+      }
+    ],
+    "Stop": [
+      { "hooks": [ { "type": "command", "command": "echo AI-OS session complete" } ] }
+    ]
+  }
+}

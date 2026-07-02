@@ -1,0 +1,26 @@
+[project]
+name = "ai-os"
+version = "0.1.0"
+description = "AI-OS — Claude capability reference platform (model/vendor-agnostic)."
+requires-python = ">=3.10"
+dependencies = [
+    "anthropic>=0.40",
+    "python-dotenv>=1.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+mcp = ["mcp>=1.0"]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Packages are importable from the repo root. `topics/` are runnable scripts,
+# not importable packages (folder names start with digits by design).
+packages = ["core", "providers"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
