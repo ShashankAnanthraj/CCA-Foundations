@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from core import assemble_system, get_settings, read_prompt  # noqa: E402
 from core.providers import ChatMessage                        # noqa: E402
-from providers.claude import ClaudeProvider                   # noqa: E402
+from core import get_provider                   # noqa: E402
 
 # Machine-enforced contract for the triage task (matches prompts/output/support_ticket_triage.md).
 TRIAGE_SCHEMA = {
@@ -61,7 +61,7 @@ def main() -> None:
     if not settings.has_api_key:
         print("\n(Set ANTHROPIC_API_KEY in .env to run demos 2–4.)")
         return
-    provider = ClaudeProvider()
+    provider = get_provider()
 
     # 2) WEAK PROMPT -------------------------------------------------------- #
     hr("2) WEAK prompt (no hierarchy, no spec) -> unstructured prose you must parse")

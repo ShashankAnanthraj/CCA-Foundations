@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core import Agent, get_settings, parallel_agents, pipeline, router  # noqa: E402
-from providers.claude import ClaudeProvider                             # noqa: E402
+from core import get_provider                             # noqa: E402
 
 SHORT = 150  # keep demo outputs (and cost) small
 
@@ -32,7 +32,7 @@ def main() -> None:
     if not settings.has_api_key:
         print("Set ANTHROPIC_API_KEY in .env to run this demo.")
         return
-    provider = ClaudeProvider()
+    provider = get_provider()
 
     def agent(name: str, system: str) -> Agent:
         return Agent(name, provider, system, model=settings.default_model, max_tokens=SHORT)

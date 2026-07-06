@@ -27,7 +27,7 @@ from core import (  # noqa: E402
     get_settings,
     read_prompt,
 )
-from providers.claude import ClaudeProvider  # noqa: E402
+from core import get_provider  # noqa: E402
 
 SHORT = 200
 QUESTION = "What are the main trade-offs of microservices vs a monolith for a small startup?"
@@ -49,7 +49,7 @@ def main() -> None:
     if not settings.has_api_key:
         print("Set ANTHROPIC_API_KEY in .env to run this demo.")
         return
-    provider = ClaudeProvider()
+    provider = get_provider()
     model, base = settings.default_model, read_prompt("base", "base_system.md")
 
     # 1) DECOMPOSE ---------------------------------------------------------- #
@@ -59,7 +59,9 @@ def main() -> None:
         schema=DECOMPOSE_SCHEMA,
         system=base,
         model=model,
-        max_tokens=256,
+        # Budget must cover reasoning models that "think" before emitting JSON, or the object
+        # gets truncated mid-string. 256 is too tight for such models; use the full cap.
+        max_tokens=settings.max_tokens,
     )
     subqs = parsed["subquestions"][:3]
     for i, q in enumerate(subqs, 1):

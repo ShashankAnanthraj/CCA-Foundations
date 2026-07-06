@@ -21,7 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from core import SkillMeta, SkillRegistry, assemble_system, get_settings, read_prompt  # noqa: E402
 from core.providers import ChatMessage                                                 # noqa: E402
-from providers.claude import ClaudeProvider                                            # noqa: E402
+from core import get_provider                                            # noqa: E402
 
 TASK = (
     "Review this SQL query for issues:\n"
@@ -79,7 +79,7 @@ def main() -> None:
 
     # 4) APPLY -------------------------------------------------------------- #
     hr("4) Apply the skill: Base prompt + skill body -> guided answer")
-    provider = ClaudeProvider()
+    provider = get_provider()
     system = assemble_system(read_prompt("base", "base_system.md"), body)
     resp = provider.chat(
         [ChatMessage("user", TASK)],

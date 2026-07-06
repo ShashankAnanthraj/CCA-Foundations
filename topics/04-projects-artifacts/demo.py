@@ -17,7 +17,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core import ChatMessage, assemble_system, get_settings, load_project, read_prompt  # noqa: E402
-from providers.claude import ClaudeProvider                                             # noqa: E402
+from core import get_provider                                             # noqa: E402
 
 MANIFEST = ROOT / "projects" / "devrel_assistant" / "project.json"
 ARTIFACT_DIR = ROOT / "runtime" / "artifacts"  # gitignored
@@ -41,8 +41,10 @@ def main() -> None:
     if not settings.has_api_key:
         print("\n(Set ANTHROPIC_API_KEY in .env to run steps 2–3.)")
         return
-    provider = ClaudeProvider()
-    model = project.model or settings.default_model
+    provider = get_provider()
+    # The manifest pins a Claude model; honor it only on the Claude provider, else use the
+    # active provider's configured model so the project runs anywhere (provider-agnostic core).
+    model = project.model if (settings.provider == "claude" and project.model) else settings.default_model
     system = assemble_system(read_prompt("base", "base_system.md"), project.context_text())
 
     # 2) GROUNDED ANSWER (project context) --------------------------------- #

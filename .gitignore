@@ -19,3 +19,6 @@ Thumbs.db
 # AI-OS runtime artifacts
 /runtime/
 *.local.json
+
+# Live MCP manifest (may reference secrets via ${ENV}); commit servers.example.json instead
+/mcp/servers.json

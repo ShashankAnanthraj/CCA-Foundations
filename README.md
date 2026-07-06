@@ -37,5 +37,20 @@ copy .env.example .env    # macOS/Linux: cp .env.example .env
 python topics/01-foundations/demo.py
 ```
 
+Full instructions — every demo, provider switching, the MCP bridge, and validation — are in
+**[docs/RUNNING.md](docs/RUNNING.md)**.
+
+## Validate
+
+Key-free and free of cost:
+
+```bash
+python -m compileall -q core providers topics mcp   # syntax check
+pip install -e ".[mcp,dev]" && pytest -q            # offline test suite (FakeProvider, no API key)
+```
+CI runs both on every push (`.github/workflows/ci.yml`).
+
 ## Status
-Skeleton + **Topic 01 Foundations** delivered. Remaining topics build one increment at a time — see the tracker in [topics/README.md](topics/README.md).
+All 12 topics are delivered — see the tracker in [topics/README.md](topics/README.md). The platform
+also ships an MCP **client bridge** (`core/mcp_client.py`) so agents can use external MCP servers
+(filesystem, GitHub, docs, deploy, …); see [topics/07-advanced-mcp/](topics/07-advanced-mcp/).
