@@ -3,6 +3,9 @@
 How to install, run the demos, and validate the project. Windows PowerShell is shown first; POSIX
 equivalents are noted inline.
 
+> **Studying for the Claude Certified Architect: Foundations exam?** See [exam/](exam/) — coverage
+> map, gap analysis, and a reconciliation of this project's coined frameworks with real Anthropic terms.
+
 ## 1. Install
 
 ```powershell
@@ -73,7 +76,7 @@ Two levels, both **key-free and free of cost**:
 
 ```powershell
 # a) Syntax check — fast, compiles every module
-python -m compileall -q core providers topics mcp
+python -m compileall -q core providers topics mcp evals
 
 # b) Test suite — offline, deterministic (uses a FakeProvider; no API key, no network)
 pytest -q

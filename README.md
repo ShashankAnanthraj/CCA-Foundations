@@ -50,6 +50,12 @@ pip install -e ".[mcp,dev]" && pytest -q            # offline test suite (FakePr
 ```
 CI runs both on every push (`.github/workflows/ci.yml`).
 
+## Exam readiness (Claude Certified Architect: Foundations)
+Studying this repo for the CCA-F exam? Read **[docs/exam/](docs/exam/)** first — it maps each topic to
+the real exam domains, flags the gaps (evals, vision/PDF, real Agent SDK, caching depth), and
+reconciles the project's coined frameworks with actual Anthropic terminology. Honest take: a strong
+conceptual foundation, **not sufficient alone** — pair it with the official Exam Guide + Partner Academy.
+
 ## Status
 All 12 topics are delivered — see the tracker in [topics/README.md](topics/README.md). The platform
 also ships an MCP **client bridge** (`core/mcp_client.py`) so agents can use external MCP servers

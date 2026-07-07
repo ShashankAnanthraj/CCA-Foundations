@@ -25,7 +25,7 @@ jobs:
         run: pip install -e ".[mcp,dev]"
 
       - name: Syntax check
-        run: python -m compileall -q core providers topics mcp
+        run: python -m compileall -q core providers topics mcp evals
 
       - name: Test suite (offline, no API key)
         run: pytest -q
