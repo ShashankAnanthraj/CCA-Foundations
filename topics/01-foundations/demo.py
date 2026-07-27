@@ -92,7 +92,8 @@ def main() -> None:
 
     # 5) THINKING + EFFORT -------------------------------------------------- #
     hr("5) Adaptive thinking + effort (quality vs cost/latency)")
-    reasoning_q = "A bat and ball cost $1.10. The bat costs $1 more than the ball. Ball price?"
+    reasoning_q = "A bat and ball cost $3.10. The bat costs $2 more than the ball. Ball price?"
+    print(f"  Question: {reasoning_q}")
     resp2 = provider.chat(
         [ChatMessage("user", reasoning_q)],
         system=BASE_SYSTEM,

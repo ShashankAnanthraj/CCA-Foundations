@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CCA-F Deep Dive — Claude, In Depth</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --ground:#16130f; --surface:#201911; --surface-2:#2a2016; --raise:#33271a;
+  --line:rgba(224,128,92,.16); --line-2:rgba(240,233,224,.10);
+  --ink:#f3eae0; --ink-dim:#c3b2a2; --ink-faint:#8f7d6c;
+  --accent:#e0805c; --accent-soft:rgba(224,128,92,.14); --accent-line:rgba(224,128,92,.4);
+  --teal:#74bdb6; --teal-soft:rgba(116,189,182,.14); --teal-line:rgba(116,189,182,.4);
+  --good:#7fca90; --warn:#e6bb52; --crit:#e57a68; --violet:#a893e0;
+  --good-soft:rgba(127,202,144,.12); --crit-soft:rgba(229,122,104,.12); --warn-soft:rgba(230,187,82,.12);
+  --shadow:0 22px 60px -30px rgba(0,0,0,.8), 0 4px 14px -8px rgba(0,0,0,.6);
+  --f-sans:"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --f-mono:"Cascadia Code","Cascadia Mono",ui-monospace,"SF Mono",Consolas,"Roboto Mono",monospace;
+  --stage:1220px; --r:14px;
+}
+@media (prefers-color-scheme:light){:root{
+  --ground:#f4efe6; --surface:#fffdf8; --surface-2:#efe7da; --raise:#e7dccb;
+  --line:rgba(140,80,55,.16); --line-2:rgba(40,30,22,.10);
+  --ink:#2a211a; --ink-dim:#6a5a4c; --ink-faint:#9c8a79;
+  --accent:#bd5836; --accent-soft:rgba(189,88,54,.10); --accent-line:rgba(189,88,54,.42);
+  --teal:#2c7e77; --teal-soft:rgba(44,126,119,.10); --teal-line:rgba(44,126,119,.4);
+  --good:#3f9d5a; --warn:#b3872a; --crit:#c25742; --violet:#6f56b0;
+  --good-soft:rgba(63,157,90,.12); --crit-soft:rgba(194,87,66,.12); --warn-soft:rgba(179,135,42,.14);
+  --shadow:0 20px 50px -32px rgba(80,50,30,.45), 0 3px 10px -6px rgba(80,50,30,.28);
+}}
+:root[data-theme="dark"]{
+  --ground:#16130f; --surface:#201911; --surface-2:#2a2016; --raise:#33271a;
+  --line:rgba(224,128,92,.16); --line-2:rgba(240,233,224,.10);
+  --ink:#f3eae0; --ink-dim:#c3b2a2; --ink-faint:#8f7d6c;
+  --accent:#e0805c; --accent-soft:rgba(224,128,92,.14); --accent-line:rgba(224,128,92,.4);
+  --teal:#74bdb6; --teal-soft:rgba(116,189,182,.14); --teal-line:rgba(116,189,182,.4);
+  --good:#7fca90; --warn:#e6bb52; --crit:#e57a68; --violet:#a893e0;
+  --good-soft:rgba(127,202,144,.12); --crit-soft:rgba(229,122,104,.12); --warn-soft:rgba(230,187,82,.12);
+  --shadow:0 22px 60px -30px rgba(0,0,0,.8), 0 4px 14px -8px rgba(0,0,0,.6);
+}
+:root[data-theme="light"]{
+  --ground:#f4efe6; --surface:#fffdf8; --surface-2:#efe7da; --raise:#e7dccb;
+  --line:rgba(140,80,55,.16); --line-2:rgba(40,30,22,.10);
+  --ink:#2a211a; --ink-dim:#6a5a4c; --ink-faint:#9c8a79;
+  --accent:#bd5836; --accent-soft:rgba(189,88,54,.10); --accent-line:rgba(189,88,54,.42);
+  --teal:#2c7e77; --teal-soft:rgba(44,126,119,.10); --teal-line:rgba(44,126,119,.4);
+  --good:#3f9d5a; --warn:#b3872a; --crit:#c25742; --violet:#6f56b0;
+  --good-soft:rgba(63,157,90,.12); --crit-soft:rgba(194,87,66,.12); --warn-soft:rgba(179,135,42,.14);
+  --shadow:0 20px 50px -32px rgba(80,50,30,.45), 0 3px 10px -6px rgba(80,50,30,.28);
+}
+html,body{height:100%}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-sans);line-height:1.5;overflow:hidden;-webkit-font-smoothing:antialiased}
+.deck{position:fixed;inset:0;background:
+  radial-gradient(circle at 1px 1px, var(--line-2) 1px, transparent 0) 0 0/26px 26px,
+  radial-gradient(120% 90% at 84% -10%, var(--accent-soft), transparent 60%),
+  radial-gradient(90% 80% at 0% 110%, var(--teal-soft), transparent 55%);}
+
+.chrome{position:fixed;z-index:40;font-family:var(--f-mono)}
+.chrome.tl{top:0;left:0;padding:16px 22px;display:flex;align-items:center;gap:12px}
+.chrome.tr{top:0;right:0;padding:12px 18px;display:flex;align-items:center;gap:8px}
+.brand{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-dim)}
+.brand b{color:var(--accent)}
+.dotset{display:flex;gap:5px}.dotset i{width:8px;height:8px;border-radius:50%;background:var(--line);display:block}
+.dotset i:first-child{background:var(--accent)}.dotset i:nth-child(2){background:var(--teal)}
+.modtag{position:fixed;z-index:40;left:22px;bottom:52px;font-family:var(--f-mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-faint)}
+.modtag b{color:var(--accent)}
+.btn{font-family:var(--f-mono);font-size:12px;letter-spacing:.05em;background:var(--surface);color:var(--ink-dim);border:1px solid var(--line);border-radius:9px;padding:8px 11px;cursor:pointer;transition:.18s;line-height:1;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{color:var(--ink);border-color:var(--accent-line);background:var(--surface-2)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.rail{position:fixed;z-index:40;left:0;right:0;bottom:0;height:46px;display:flex;align-items:center;gap:16px;padding:0 20px;border-top:1px solid var(--line);background:linear-gradient(to top,var(--ground),transparent);font-family:var(--f-mono);font-size:12px;color:var(--ink-dim)}
+.progwrap{flex:1;height:4px;border-radius:99px;background:var(--line);overflow:hidden}
+.prog{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--teal));transition:width .4s cubic-bezier(.4,0,.2,1)}
+.count{font-variant-numeric:tabular-nums;letter-spacing:.1em;min-width:70px;text-align:right}.count b{color:var(--accent)}
+.navbtns{display:flex;gap:6px}.navbtns .btn{padding:7px 12px}
+.hint{color:var(--ink-faint);letter-spacing:.04em}@media (max-width:820px){.hint{display:none}}
+
+.slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:74px 40px 66px;opacity:0;visibility:hidden;transform:translateY(16px) scale(.992);transition:opacity .45s ease, transform .45s cubic-bezier(.2,.7,.2,1);overflow:auto}
+.slide.active{opacity:1;visibility:visible;transform:none}
+.stage{width:100%;max-width:var(--stage);margin:0 auto}
+@media (max-width:820px){.slide{padding:66px 18px 58px}}
+.eyebrow{font-family:var(--f-mono);font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:10px}
+.eyebrow::before{content:"";width:24px;height:1px;background:var(--accent);display:inline-block}
+.headline{font-size:clamp(1.55rem,3.9vw,2.9rem);line-height:1.05;font-weight:800;letter-spacing:-.02em;text-wrap:balance;margin:0 0 8px}
+.sub{color:var(--ink-dim);font-size:clamp(.98rem,1.5vw,1.12rem);max-width:64ch;text-wrap:pretty}
+.k{color:var(--accent)}.k2{color:var(--teal)}
+.slide .r{opacity:0;transform:translateY(12px)}
+.slide.active .r{opacity:1;transform:none;transition:opacity .5s ease,transform .5s cubic-bezier(.2,.7,.2,1);transition-delay:calc(var(--i,0)*80ms)}
+
+.phase{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;padding:4px 9px;border-radius:6px;margin-bottom:12px;border:1px solid}
+.phase.mech{color:var(--teal);border-color:var(--teal-line);background:var(--teal-soft)}
+.phase.lev{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.phase.pit{color:var(--crit);border-color:rgba(229,122,104,.4);background:var(--crit-soft)}
+.phase.con{color:var(--violet);border-color:rgba(168,147,224,.4);background:rgba(168,147,224,.12)}
+
+.node{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px 15px;box-shadow:var(--shadow);position:relative}
+.node .lab{font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:5px}
+.node .ttl{font-weight:700;font-size:1rem}.node .desc{color:var(--ink-dim);font-size:.88rem;margin-top:3px}
+.node.hl{border-color:var(--accent-line);box-shadow:var(--shadow),0 0 0 1px var(--accent-line),0 0 24px -6px var(--accent)}
+.node.teal{border-color:var(--teal-line)}
+.flow{display:flex;flex-direction:column;align-items:center;gap:0}
+.ar{color:var(--accent);font-size:1.4rem;line-height:1;padding:5px 0;font-family:var(--f-mono)}.ar.h{padding:0 6px}
+.two{display:grid;grid-template-columns:1.05fr .95fr;gap:clamp(16px,3.5vw,40px);align-items:center}
+@media (max-width:900px){.two{grid-template-columns:1fr}}
+.cards{display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:15px;box-shadow:var(--shadow)}
+.card h3{margin:0 0 5px;font-size:1rem}.card p{margin:0;color:var(--ink-dim);font-size:.88rem}
+.card .lab{font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:7px}
+.pill{display:inline-flex;align-items:center;gap:7px;font-family:var(--f-mono);font-size:11px;letter-spacing:.04em;padding:5px 10px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--ink-dim)}
+.pill i{width:7px;height:7px;border-radius:50%;background:var(--accent);display:block}
+.tag{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.06em;color:var(--ink-faint)}
+.note{font-family:var(--f-mono);font-size:11.5px;color:var(--ink-faint);border-left:2px solid var(--accent);padding-left:12px;margin-top:14px;line-height:1.6}
+.note.teal{border-color:var(--teal)} .note.crit{border-color:var(--crit)}
+.kbd{font-family:var(--f-mono);font-size:11px;background:var(--surface);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 7px;color:var(--ink-dim)}
+code.inl{font-family:var(--f-mono);font-size:.88em;background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;color:var(--accent)}
+
+.spec{font-family:var(--f-mono);font-size:.82rem;line-height:1.55;color:var(--ink-dim);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;white-space:pre;overflow:auto;box-shadow:var(--shadow)}
+.spec .kk{color:var(--accent)} .spec .vv{color:var(--teal)} .spec .cc{color:var(--ink-faint);font-style:italic} .spec .nn{color:var(--violet)}
+
+.cmp{width:100%;border-collapse:collapse;font-size:.9rem;box-shadow:var(--shadow);border-radius:12px;overflow:hidden}
+.cmp th,.cmp td{padding:10px 13px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.cmp thead th{background:var(--surface-2);font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim)}
+.cmp thead th:nth-child(2){color:var(--accent)} .cmp thead th:nth-child(3){color:var(--teal)}
+.cmp tbody th{background:var(--surface);font-weight:600;color:var(--ink-faint);font-family:var(--f-mono);font-size:.8rem}
+.cmp td{background:var(--surface);color:var(--ink-dim)}
+.cmp tr:last-child td,.cmp tr:last-child th{border-bottom:none}
+.cmp td b{color:var(--ink)}
+
+.gb{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media (max-width:760px){.gb{grid-template-columns:1fr}}
+.panel{border-radius:14px;padding:16px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.panel.good{border-color:rgba(127,202,144,.35)}.panel.bad{border-color:rgba(229,122,104,.35)}
+.panel h3{margin:0 0 11px;display:flex;align-items:center;gap:9px;font-size:1rem}
+.panel .ic{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-family:var(--f-mono);font-weight:700;font-size:.85rem}
+.panel.good .ic{background:var(--good-soft);color:var(--good)}.panel.bad .ic{background:var(--crit-soft);color:var(--crit)}
+.panel ul{margin:0;padding-left:2px;list-style:none;display:flex;flex-direction:column;gap:8px}
+.panel li{font-size:.89rem;color:var(--ink-dim);padding-left:20px;position:relative}
+.panel li::before{position:absolute;left:0;top:0;font-family:var(--f-mono);font-weight:700}
+.panel.good li::before{content:"+";color:var(--good)}.panel.bad li::before{content:"\2013";color:var(--crit)}
+
+.mech{display:flex;flex-direction:column;gap:9px;counter-reset:m}
+.mech .step{display:flex;gap:12px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:11px 13px;box-shadow:var(--shadow)}
+.mech .step::before{counter-increment:m;content:counter(m);font-family:var(--f-mono);font-weight:700;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-line);width:24px;height:24px;border-radius:7px;display:grid;place-items:center;flex:none;font-size:.8rem}
+.mech .step b{color:var(--ink)}.mech .step span{color:var(--ink-dim);font-size:.9rem}
+
+.divider .stage{display:grid;grid-template-columns:auto 1fr;gap:clamp(20px,5vw,60px);align-items:center}
+.divnum{font-family:var(--f-mono);font-weight:700;font-size:clamp(4rem,15vw,10rem);line-height:.8;color:transparent;-webkit-text-stroke:2px var(--accent-line);letter-spacing:-.04em}
+.divider .headline{font-size:clamp(1.9rem,5.5vw,3.6rem)}
+.divlist{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+
+.cover{text-align:center;display:flex;flex-direction:column;align-items:center;gap:22px}
+.cover .big{font-size:clamp(2.2rem,7vw,4.8rem);font-weight:800;letter-spacing:-.03em;line-height:.98;text-wrap:balance;margin:0}
+.cover .big .k{background:linear-gradient(120deg,var(--accent),var(--teal));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.badge{font-family:var(--f-mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;color:var(--ink-dim);border:1px solid var(--line);border-radius:99px;padding:8px 18px}
+.mono-line{font-family:var(--f-mono);color:var(--ink-faint);font-size:13px}.mono-line .k{color:var(--accent)}
+.cover .fw{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.cursor{display:inline-block;width:.55ch;height:1.05em;background:var(--accent);vertical-align:-2px;margin-left:2px;border-radius:1px}
+@media (prefers-reduced-motion:no-preference){.cursor{animation:blink 1.05s step-end infinite}}
+@keyframes blink{50%{opacity:0}}
+
+.modgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:11px}
+.modcell{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:13px;cursor:pointer;transition:.18s;box-shadow:var(--shadow);color:inherit;font-family:inherit;display:flex;flex-direction:column;gap:5px}
+.modcell:hover{border-color:var(--accent-line);transform:translateY(-3px)}
+.modcell:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.modcell .n{font-family:var(--f-mono);font-size:11px;color:var(--accent);letter-spacing:.1em}
+.modcell .t{font-weight:700;font-size:.95rem;line-height:1.15}.modcell .d{font-size:.8rem;color:var(--ink-dim)}
+
+.fwrow{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}@media (max-width:820px){.fwrow{grid-template-columns:1fr}}
+.fwcard{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);border-top:3px solid var(--accent)}
+.fwcard:nth-child(2){border-top-color:var(--teal)}.fwcard:nth-child(3){border-top-color:var(--warn)}
+.fwcard .name{font-family:var(--f-mono);font-weight:700;font-size:1.4rem}
+.fwcard .for{font-family:var(--f-mono);font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:12px}
+.letters{display:flex;flex-direction:column;gap:6px}.letters div{font-size:.88rem;color:var(--ink-dim)}
+.letters b{font-family:var(--f-mono);color:var(--ink);display:inline-block;width:1.4em}
+.fwcard:nth-child(1) .letters b{color:var(--accent)}.fwcard:nth-child(2) .letters b{color:var(--teal)}.fwcard:nth-child(3) .letters b{color:var(--warn)}
+
+.tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:11px;align-items:stretch}@media (max-width:820px){.tiers{grid-template-columns:repeat(2,1fr)}}
+.tier{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:var(--shadow);transition:.2s}
+.tier:hover{border-color:var(--accent-line);transform:translateY(-4px)}
+.tier .bar{height:7px;border-radius:99px;background:linear-gradient(90deg,var(--accent),var(--teal));margin:9px 0}
+.tier .nm{font-weight:800;font-size:1.05rem}.tier .id{font-family:var(--f-mono);font-size:10px;color:var(--ink-faint)}
+.tier .price{font-family:var(--f-mono);font-size:11px;color:var(--accent);margin-top:5px}
+.tier .role{font-size:.82rem;color:var(--ink-dim);margin-top:5px}
+
+.loop{position:relative;width:min(430px,78vw);aspect-ratio:1;margin:4px auto}
+.loop .center{position:absolute;inset:32%;border-radius:50%;border:1px dashed var(--line);display:flex;align-items:center;justify-content:center;text-align:center;font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);padding:10px}
+.lp{position:absolute;width:124px;transform:translate(-50%,-50%);background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:9px;box-shadow:var(--shadow);text-align:center;transition:.3s}
+.lp .s{font-family:var(--f-mono);font-size:9.5px;color:var(--accent);letter-spacing:.1em}
+.lp .n{font-weight:700;font-size:.88rem}.lp .n small{display:block;font-weight:400;color:var(--ink-dim);font-size:.74rem}
+.lp.on{border-color:var(--accent-line);box-shadow:var(--shadow),0 0 22px -4px var(--accent)}
+.ring{position:absolute;inset:6%;border-radius:50%;border:1.5px solid var(--line);pointer-events:none}
+.ringspin{position:absolute;inset:6%;border-radius:50%;border:1.5px solid transparent;border-top-color:var(--accent);pointer-events:none}
+@media (prefers-reduced-motion:no-preference){.ringspin{animation:spin 4.5s linear infinite}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.org{display:flex;flex-direction:column;align-items:center;gap:0}
+.orgrow{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.worker{background:var(--surface);border:1px solid var(--line);border-radius:11px;padding:10px 12px;text-align:center;box-shadow:var(--shadow);min-width:118px}
+.worker .wl{font-family:var(--f-mono);font-size:9px;color:var(--teal);letter-spacing:.08em;text-transform:uppercase}
+.fan{display:flex;gap:38px;color:var(--accent);font-family:var(--f-mono);font-size:1.25rem}
+
+.donut{width:190px;height:190px;border-radius:50%;background:conic-gradient(var(--accent) 0 27%,var(--teal) 27% 47%,var(--warn) 47% 67%,var(--violet) 67% 85%,var(--good) 85% 100%);position:relative;flex:none;box-shadow:var(--shadow)}
+.donut::after{content:"";position:absolute;inset:26%;border-radius:50%;background:var(--ground)}
+.donut .mid{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-family:var(--f-mono);font-size:11px;color:var(--ink-faint);z-index:2}
+.leg{display:flex;flex-direction:column;gap:7px}.leg div{display:flex;align-items:center;gap:9px;font-size:.88rem;color:var(--ink-dim)}
+.leg i{width:12px;height:12px;border-radius:3px;flex:none}
+.status{font-family:var(--f-mono);font-size:10px;letter-spacing:.07em;padding:2px 7px;border-radius:99px;text-transform:uppercase}
+.status.off{background:var(--good-soft);color:var(--good);border:1px solid rgba(127,202,144,.4)}
+.status.un{background:var(--warn-soft);color:var(--warn);border:1px solid rgba(230,187,82,.4)}
+.svgfig{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px 16px}
+.svgfig svg{width:100%;height:auto;display:block;overflow:visible;font-family:var(--f-mono)}
+.svgfig text{fill:var(--ink-dim);font-size:11px}
+.svgfig .t-ink{fill:var(--ink)}.svgfig .t-dim{fill:var(--ink-dim)}.svgfig .t-faint{fill:var(--ink-faint)}
+.svgfig .t-acc{fill:var(--accent)}.svgfig .t-teal{fill:var(--teal)}.svgfig .t-crit{fill:var(--crit)}.svgfig .t-good{fill:var(--good)}
+.svgfig .f-surf{fill:var(--surface-2)}.svgfig .f-acc{fill:var(--accent)}.svgfig .f-accs{fill:var(--accent-soft)}
+.svgfig .f-teal{fill:var(--teal)}.svgfig .f-teals{fill:var(--teal-soft)}
+.svgfig .f-crit{fill:var(--crit)}.svgfig .f-crits{fill:var(--crit-soft)}
+.svgfig .f-good{fill:var(--good)}.svgfig .f-goods{fill:var(--good-soft)}
+.svgfig .f-faint{fill:var(--ink-faint)}.svgfig .f-none{fill:none}
+.svgfig .s-line{stroke:var(--line)}.svgfig .s-acc{stroke:var(--accent)}.svgfig .s-teal{stroke:var(--teal)}.svgfig .s-crit{stroke:var(--crit)}.svgfig .s-faint{stroke:var(--ink-faint)}.svgfig .s-good{stroke:var(--good)}
+.svgfig .cap{font-size:9px;letter-spacing:.04em}
+.svgfig rect{stroke-width:1}
+
+.menu{position:fixed;inset:0;z-index:60;background:rgba(10,8,6,.74);backdrop-filter:blur(10px);display:none;padding:64px 26px 36px;overflow:auto}
+.menu.open{display:block}
+.menu h2{font-family:var(--f-mono);font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);text-align:center;margin:0 0 20px}
+.menugrid{max-width:1040px;margin:0 auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px}
+.mi{text-align:left;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 11px;cursor:pointer;color:var(--ink-dim);font-family:inherit;transition:.15s;display:flex;flex-direction:column;gap:3px}
+.mi:hover,.mi.cur{border-color:var(--accent-line);color:var(--ink)}
+.mi .mn{font-family:var(--f-mono);font-size:9.5px;color:var(--accent)}.mi .mt{font-size:.82rem;line-height:1.15}
+.menuclose{position:fixed;top:14px;right:18px;z-index:61}
+noscript{position:fixed;inset:0;display:grid;place-items:center;background:var(--ground);z-index:99;font-family:var(--f-mono);padding:40px;text-align:center}
+</style>
+</head>
+<body>
+<noscript><div>This deck needs JavaScript for navigation. Please enable it.</div></noscript>
+<div class="deck" id="deck">
+  <div class="chrome tl"><span class="dotset"><i></i><i></i><i></i></span><span class="brand"><b>CCA-F</b> · Deep Dive</span></div>
+  <div class="chrome tr"><button class="btn" id="themeBtn" title="Theme (T)">◐ theme</button><button class="btn" id="menuBtn" title="Slides (M)">▦ slides</button></div>
+  <div class="modtag" id="modtag"><b>MODULE 00</b> · INTRO</div>
+  <div class="rail">
+    <div class="navbtns"><button class="btn" id="prevBtn" title="Prev (←)">←</button><button class="btn" id="nextBtn" title="Next (→)">→</button></div>
+    <div class="progwrap"><div class="prog" id="prog"></div></div>
+    <span class="hint"><span class="kbd">←</span> <span class="kbd">→</span> nav · <span class="kbd">1–0</span> module · <span class="kbd">M</span> menu · <span class="kbd">T</span> theme</span>
+    <span class="count" id="count"><b>01</b> / 68</span>
+  </div>
+
+  <div id="slides">
+
+  <!-- 1 COVER -->
+  <section class="slide" data-mod="00" data-modlab="INTRO" data-title="Cover">
+    <div class="stage cover">
+      <div class="badge r" style="--i:0">Claude Certified Architect — Foundations · Deep Dive</div>
+      <h1 class="big r" style="--i:1">Claude,<br><span class="k">in depth.</span><span class="cursor"></span></h1>
+      <p class="sub r" style="--i:2;max-width:56ch">Not just <i>what</i> each piece is — <b>how it works under the hood</b>, the <b>real API code</b> to wield it, and the <b>pitfalls</b> that bite in production. Every model ID, price, and parameter here is current.</p>
+      <div class="fw r" style="--i:3"><span class="pill"><i></i>68 Slides</span><span class="pill"><i style="background:var(--teal)"></i>Mechanism + Code + Pitfalls</span><span class="pill"><i style="background:var(--warn)"></i>Opus 4.8 era</span></div>
+      <div class="mono-line r" style="--i:4">press <span class="k">→</span> to begin</div>
+    </div>
+  </section>
+
+  <!-- 2 HOW TO READ -->
+  <section class="slide" data-mod="00" data-modlab="INTRO" data-title="How to read this deck">
+    <div class="stage">
+      <div class="eyebrow r" style="--i:0">The rhythm</div>
+      <h2 class="headline r" style="--i:1">Four beats per topic</h2>
+      <p class="sub r" style="--i:2">Every topic moves through the same four lenses. Watch for the coloured chips at the top of each slide.</p>
+      <div class="cards r" style="--i:3;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));margin-top:20px">
+        <div class="card"><span class="phase con">◆ Concept</span><p>What it is, in one breath.</p></div>
+        <div class="card"><span class="phase mech">⚙ Mechanism</span><p>What actually happens inside — the "why it behaves that way."</p></div>
+        <div class="card"><span class="phase lev">▸ Leverage</span><p>Real Claude API code + the decision that makes it useful.</p></div>
+        <div class="card"><span class="phase pit">✕ Pitfalls</span><p>The mistakes that cost money, latency, or correctness.</p></div>
+      </div>
+      <div class="note r" style="--i:4">Code is real <code class="inl">anthropic</code> Python SDK. Default model shown: <code class="inl">claude-opus-4-8</code>.</div>
+    </div>
+  </section>
+
+  <!-- 3 ROADMAP -->
+  <section class="slide" data-mod="00" data-modlab="INTRO" data-title="Roadmap">
+    <div class="stage">
+      <div class="eyebrow r" style="--i:0">The journey</div>
+      <h2 class="headline r" style="--i:1">Ten modules, deeper</h2>
+      <p class="sub r" style="--i:2">Click any module to jump. Each now carries mechanism + code + pitfalls layers.</p>
+      <div class="modgrid r" style="--i:3;margin-top:20px" id="modgrid"></div>
+    </div>
+  </section>
+
+  <!-- 4 FRAMEWORKS -->
+  <section class="slide" data-mod="00" data-modlab="INTRO" data-title="3 Frameworks">
+    <div class="stage">
+      <div class="eyebrow r" style="--i:0">Memorize these</div>
+      <h2 class="headline r" style="--i:1">Your three <span class="k">checklists</span></h2>
+      <div class="fwrow r" style="--i:2;margin-top:18px">
+        <div class="fwcard"><div class="name">PRECISE</div><div class="for">→ Prompting</div><div class="letters"><div><b>P</b>ersona</div><div><b>R</b>esult</div><div><b>E</b>xamples</div><div><b>C</b>ontext</div><div><b>I</b>nstructions</div><div><b>S</b>pecification</div><div><b>E</b>valuation</div></div></div>
+        <div class="fwcard"><div class="name">CALM</div><div class="for">→ Context</div><div class="letters"><div><b>C</b>ache stable prefixes</div><div><b>A</b>ssemble selectively</div><div><b>L</b>imit the token budget</div><div><b>M</b>anage the lifecycle</div></div></div>
+        <div class="fwcard"><div class="name">SPIDER</div><div class="for">→ Agent reliability</div><div class="letters"><div><b>S</b>cope</div><div><b>P</b>lan</div><div><b>I</b>solate</div><div><b>D</b>etect</div><div><b>E</b>scalate</div><div><b>R</b>ecover</div></div></div>
+      </div>
+      <div class="note r" style="--i:3">Course working-checklists aligned to the exam domains — reconcile exact letters with the official Exam Guide.</div>
+    </div>
+  </section>
+
+  <!-- 5 MODEL LINEUP -->
+  <section class="slide" data-mod="00" data-modlab="INTRO" data-title="The Model Lineup">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · pick the right engine</span>
+      <h2 class="headline r" style="--i:1">The current <span class="k">lineup</span></h2>
+      <div class="tiers r" style="--i:2;margin-top:16px">
+        <div class="tier"><div class="nm">Opus 4.8</div><div class="id">claude-opus-4-8</div><div class="bar" style="width:100%"></div><div class="price">$5 / $25 · 1M ctx</div><div class="role">Deepest reasoning · the default</div></div>
+        <div class="tier"><div class="nm">Sonnet 5</div><div class="id">claude-sonnet-5</div><div class="bar" style="width:78%"></div><div class="price">$3 / $15 · 1M ctx</div><div class="role">Near-Opus coding at lower cost</div></div>
+        <div class="tier"><div class="nm">Haiku 4.5</div><div class="id">claude-haiku-4-5</div><div class="bar" style="width:50%"></div><div class="price">$1 / $5 · 200K ctx</div><div class="role">Fastest · cheapest · high volume</div></div>
+        <div class="tier"><div class="nm">Fable 5</div><div class="id">claude-fable-5</div><div class="bar" style="width:100%"></div><div class="price">$10 / $50 · 1M ctx</div><div class="role">Most capable · hardest long-horizon work</div></div>
+      </div>
+      <div class="note r" style="--i:3">Prices are $ per 1M tokens (input / output). Default to Opus 4.8; drop to Sonnet/Haiku for volume, not "to save money" on hard tasks. Prices change — verify in Anthropic docs.</div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 1 ============ -->
+  <section class="slide divider" data-mod="01" data-modlab="FOUNDATIONS" data-divider="1" data-title="Module 1 — Claude">
+    <div class="stage"><div class="divnum r" style="--i:0">01</div><div><div class="eyebrow r" style="--i:1">Module One</div><h2 class="headline r" style="--i:2">How Claude <span class="k">works</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Next-token</span><span class="pill"><i></i>Thinking & effort</span><span class="pill"><i></i>The API</span><span class="pill"><i></i>Cost</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="01" data-modlab="FOUNDATIONS" data-title="How an LLM Generates">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism</span>
+        <h2 class="headline r" style="--i:1">One token at a <span class="k">time</span></h2>
+        <p class="sub r" style="--i:2">Claude is <b>autoregressive</b>: it reads all the context, then predicts a probability for every possible next token, emits one, appends it, and repeats. There is no plan stored anywhere — the growing text <i>is</i> the state.</p>
+        <div class="note r" style="--i:3">This is why it can "change its mind" mid-sentence, why output is billed per token, and why <b>thinking out loud</b> (reasoning) improves answers — more tokens = more computation.</div>
+      </div>
+      <div class="svgfig r" style="--i:3">
+      <svg viewBox="0 0 420 292" role="img" aria-label="Next-token prediction diagram">
+        <text x="6" y="14" class="t-teal cap">read the context ▸ predict the next token</text>
+        <g font-size="12">
+          <rect x="6"   y="26" width="48" height="28" rx="7" class="f-surf s-line"/><text x="30"  y="45" text-anchor="middle" class="t-ink">The</text>
+          <rect x="60"  y="26" width="48" height="28" rx="7" class="f-surf s-line"/><text x="84"  y="45" text-anchor="middle" class="t-ink">cat</text>
+          <rect x="114" y="26" width="48" height="28" rx="7" class="f-surf s-line"/><text x="138" y="45" text-anchor="middle" class="t-ink">sat</text>
+          <rect x="168" y="26" width="48" height="28" rx="7" class="f-surf s-line"/><text x="192" y="45" text-anchor="middle" class="t-ink">on</text>
+          <rect x="222" y="26" width="48" height="28" rx="7" class="f-surf s-line"/><text x="246" y="45" text-anchor="middle" class="t-ink">the</text>
+          <rect x="276" y="26" width="48" height="28" rx="7" class="f-accs s-acc" stroke-width="1.5"/><text x="300" y="45" text-anchor="middle" class="t-acc">?</text>
+        </g>
+        <path d="M300 56 L300 74" class="f-none s-faint" stroke-width="1.5"/>
+        <polygon points="300,80 295,71 305,71" class="f-faint"/>
+        <text x="6" y="98" class="t-faint cap">probability over the whole vocabulary</text>
+        <g font-size="11">
+          <text x="6" y="121" class="t-ink">mat</text>   <rect x="60" y="110" width="230" height="14" rx="4" class="f-acc"/> <text x="296" y="121" class="t-faint" font-size="10">0.61</text>
+          <text x="6" y="145" class="t-dim">rug</text>   <rect x="60" y="134" width="70"  height="14" rx="4" class="f-accs"/><text x="136" y="145" class="t-faint" font-size="10">0.18</text>
+          <text x="6" y="169" class="t-dim">sofa</text>  <rect x="60" y="158" width="46"  height="14" rx="4" class="f-accs"/><text x="112" y="169" class="t-faint" font-size="10">0.12</text>
+          <text x="6" y="193" class="t-dim">floor</text> <rect x="60" y="182" width="34"  height="14" rx="4" class="f-accs"/><text x="100" y="193" class="t-faint" font-size="10">0.09</text>
+        </g>
+        <path d="M300 117 C 384 117 396 150 396 178 C 396 224 210 252 40 252 C 20 252 12 242 12 228" class="f-none s-teal" stroke-width="1.5" stroke-dasharray="4 4"/>
+        <polygon points="12,214 7,225 17,225" class="f-teal"/>
+        <text x="118" y="248" class="t-teal cap">sample the winner ▸ append it ▸ repeat</text>
+      </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="01" data-modlab="FOUNDATIONS" data-title="Thinking & Effort">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · the intelligence dial</span>
+        <h2 class="headline r" style="--i:1"><span class="k">Adaptive thinking</span> + effort</h2>
+        <p class="sub r" style="--i:2">Modern Claude decides <b>when and how much to think</b> on its own. You no longer set a token budget — you set an <b>effort</b> level, and Claude allocates reasoning within it.</p>
+        <div class="note teal r" style="--i:3">Rule of thumb: <b>high</b> for most serious work, <b>xhigh</b> for hard coding/agentic tasks, <b>low</b> for cheap/fast subtasks.</div>
+      </div>
+      <div class="spec r" style="--i:3">client.messages.create(
+  <span class="kk">model</span>=<span class="vv">"claude-opus-4-8"</span>,
+  <span class="kk">max_tokens</span>=<span class="nn">16000</span>,
+  <span class="kk">thinking</span>={<span class="kk">"type"</span>:<span class="vv">"adaptive"</span>},
+  <span class="kk">output_config</span>={<span class="kk">"effort"</span>:<span class="vv">"high"</span>},
+  <span class="cc"># low | medium | high | xhigh | max</span>
+  <span class="kk">messages</span>=[{<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+             <span class="kk">"content"</span>:<span class="vv">"Plan the migration."</span>}],
+)</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="01" data-modlab="FOUNDATIONS" data-title="The Messages API">
+    <div class="stage two">
+      <div><span class="phase con r" style="--i:0">◆ Concept · the one endpoint</span>
+        <h2 class="headline r" style="--i:1">Everything is <span class="k">/v1/messages</span></h2>
+        <p class="sub r" style="--i:2">Tools, vision, caching, structured output — all features of a <b>single</b> stateless endpoint. You send <code class="inl">system</code> + a <code class="inl">messages</code> list; you get back <code class="inl">content</code> blocks + <code class="inl">usage</code> + <code class="inl">stop_reason</code>.</p>
+        <div class="note r" style="--i:3">Content is a <b>list of typed blocks</b> — check <code class="inl">block.type</code> (text / thinking / tool_use) before reading it.</div>
+      </div>
+      <div class="spec r" style="--i:3">resp = client.messages.create(
+  model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">1024</span>,
+  <span class="kk">system</span>=<span class="vv">"You are a support agent."</span>,
+  <span class="kk">messages</span>=[
+    {<span class="kk">"role"</span>:<span class="vv">"user"</span>,      <span class="kk">"content"</span>:<span class="vv">"..."</span>},
+    {<span class="kk">"role"</span>:<span class="vv">"assistant"</span>, <span class="kk">"content"</span>:<span class="vv">"..."</span>},
+    {<span class="kk">"role"</span>:<span class="vv">"user"</span>,      <span class="kk">"content"</span>:<span class="vv">"..."</span>},
+  ],
+)
+<span class="kk">resp.stop_reason</span>  <span class="cc"># end_turn | tool_use | max_tokens ...</span>
+<span class="kk">resp.usage</span>        <span class="cc"># input_tokens, output_tokens</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="01" data-modlab="FOUNDATIONS" data-title="Cost & Token Counting">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · know the bill before you send</span>
+        <h2 class="headline r" style="--i:1">Cost is <span class="k">tokens × price</span></h2>
+        <p class="sub r" style="--i:2">Estimate <b>before</b> sending with <code class="inl">count_tokens</code> — never <code class="inl">tiktoken</code> (that's OpenAI's tokenizer and undercounts Claude badly).</p>
+        <div class="note crit r" style="--i:3">Opus 4.8 = $5 / 1M input. A 200K-token doc ≈ $1.00 just to read it once — before any output.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="cc"># exact count for THIS model</span>
+n = client.messages.count_tokens(
+  model=<span class="vv">"claude-opus-4-8"</span>,
+  messages=messages,
+).input_tokens
+
+est = n * <span class="nn">5</span> / <span class="nn">1_000_000</span>   <span class="cc"># $/1M input</span>
+<span class="nn">print</span>(<span class="vv">f"~${est:.4f} to send"</span>)
+
+<span class="cc"># after the call, the truth:</span>
+resp.usage.input_tokens
+resp.usage.output_tokens</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="01" data-modlab="FOUNDATIONS" data-title="Powers & Limits">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls · know the edges</span>
+      <h2 class="headline r" style="--i:1">Powers — and how to <span class="k">patch</span> the limits</h2>
+      <div class="gb r" style="--i:2;margin-top:16px">
+        <div class="panel good"><h3><span class="ic">✓</span>Leans on</h3><ul><li>Language, code, reasoning, vision</li><li>Long-context reading (up to 1M tokens)</li><li>Tool use & structured output</li><li>Following clear instructions faithfully</li></ul></div>
+        <div class="panel bad"><h3><span class="ic">!</span>Limit → mitigation</h3><ul><li>Hallucination → ground with context + "say if unsure"</li><li>Knowledge cutoff → give tools / web search</li><li>No memory → resend history / persist facts</li><li>Non-deterministic → validate & retry, don't assume exactness</li></ul></div>
+      </div>
+      <div class="note r" style="--i:3">Every limitation has an engineering answer — the rest of this deck is those answers.</div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 2 ============ -->
+  <section class="slide divider" data-mod="02" data-modlab="PROMPTING" data-divider="2" data-title="Module 2 — Prompting">
+    <div class="stage"><div class="divnum r" style="--i:0">02</div><div><div class="eyebrow r" style="--i:1">Module Two</div><h2 class="headline r" style="--i:2">Prompting, <span class="k">engineered</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Roles</span><span class="pill"><i></i>PRECISE</span><span class="pill"><i></i>XML</span><span class="pill"><i></i>Few-shot</span><span class="pill"><i></i>Structured output</span><span class="pill"><i></i>Chaining</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="The Three Roles">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · who has authority</span>
+        <h2 class="headline r" style="--i:1">System &gt; User, by <span class="k">design</span></h2>
+        <p class="sub r" style="--i:2">The <b>system</b> prompt sets standing rules and persona and carries more weight than user turns. <b>User</b> and <b>assistant</b> messages alternate to form the conversation. The model is trained to let system-level instructions win.</p>
+        <div class="note r" style="--i:3">Put stable rules in <code class="inl">system</code>; it also makes the prompt <b>cacheable</b> (Module 3).</div>
+      </div>
+      <div class="spec r" style="--i:3">system = <span class="vv">"""You are a senior support
+engineer. Be concise. Never
+reveal internal order IDs."""</span>
+
+messages = [
+  {<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+   <span class="kk">"content"</span>:<span class="vv">"Where's order A-19?"</span>},
+]
+<span class="cc"># assistant reply is appended,</span>
+<span class="cc"># then the next user turn, ...</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="PRECISE in Practice">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · a repeatable recipe</span>
+      <h2 class="headline r" style="--i:1">Vague → <span class="k">PRECISE</span></h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Before</h3><p style="font-family:var(--f-mono);font-size:.85rem;color:var(--ink-dim)">"Summarize this feedback."</p><p style="margin-top:10px">Ambiguous length, format, audience → inconsistent output you can't parse.</p></div>
+        <div class="panel good"><h3><span class="ic">✓</span>After</h3><p style="font-family:var(--f-mono);font-size:.8rem;color:var(--ink-dim);white-space:pre-wrap">P: You are a product analyst.
+R: 3 themes with a severity 1–5.
+E: [one worked example]
+C: &lt;feedback&gt;…&lt;/feedback&gt;
+I: Only use the feedback given.
+S: Return JSON {theme,severity}.
+E: If none, return [].</p></div>
+      </div>
+      <div class="note r" style="--i:3">Each letter removes one degree of freedom the model would otherwise guess.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="XML Prompting">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · fences the model can see</span>
+        <h2 class="headline r" style="--i:1">Tags remove <span class="k">ambiguity</span></h2>
+        <p class="sub r" style="--i:2">Claude is trained on lots of structured text, so explicit tags like <code class="inl">&lt;document&gt;</code> and <code class="inl">&lt;instructions&gt;</code> give it clean boundaries — it stops confusing your data for your instructions.</p>
+        <div class="note r" style="--i:3">Especially valuable when user-supplied content could contain text that <i>looks</i> like an instruction (prompt-injection defense).</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="nn">&lt;instructions&gt;</span>
+  Extract every action item.
+<span class="nn">&lt;/instructions&gt;</span>
+
+<span class="nn">&lt;transcript&gt;</span>
+  {{ meeting_text }}
+<span class="nn">&lt;/transcript&gt;</span>
+
+<span class="nn">&lt;format&gt;</span>
+  One bullet per item: owner — task
+<span class="nn">&lt;/format&gt;</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="Few-shot">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · teach by example</span>
+        <h2 class="headline r" style="--i:1">Show, don't <span class="k">tell</span></h2>
+        <p class="sub r" style="--i:2">Two or three worked <b>input → output</b> pairs teach format and edge cases faster than a paragraph of rules. Zero-shot = none, one-shot = one, few-shot = several.</p>
+        <div class="note r" style="--i:3">Put examples as prior <b>user/assistant</b> turns, or inside <code class="inl">&lt;example&gt;</code> tags. Cover the tricky case, not just the happy path.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="nn">&lt;example&gt;</span>
+  <span class="kk">input:</span>  <span class="vv">"gr8 servce!!"</span>
+  <span class="kk">output:</span> {<span class="vv">"sentiment"</span>:<span class="vv">"pos"</span>,
+           <span class="vv">"typo"</span>:<span class="nn">true</span>}
+<span class="nn">&lt;/example&gt;</span>
+<span class="nn">&lt;example&gt;</span>
+  <span class="kk">input:</span>  <span class="vv">"it's fine i guess"</span>
+  <span class="kk">output:</span> {<span class="vv">"sentiment"</span>:<span class="vv">"neutral"</span>,
+           <span class="vv">"typo"</span>:<span class="nn">false</span>}
+<span class="nn">&lt;/example&gt;</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="Structured Output">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · guarantee the shape</span>
+        <h2 class="headline r" style="--i:1">Don't beg for JSON — <span class="k">enforce</span> it</h2>
+        <p class="sub r" style="--i:2">The modern way to get machine-parseable output is <b>structured outputs</b>: pass a JSON schema and the response is <i>constrained</i> to match — no more regex-scraping prose. (The old "prefill the assistant turn" trick now errors.)</p>
+        <div class="note teal r" style="--i:3"><code class="inl">messages.parse()</code> validates against a Pydantic model and hands you a typed object.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="kk">from</span> pydantic <span class="kk">import</span> BaseModel
+
+<span class="kk">class</span> <span class="nn">Contact</span>(BaseModel):
+    name: str
+    email: str
+    wants_demo: bool
+
+resp = client.messages.<span class="kk">parse</span>(
+  model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">1024</span>,
+  messages=[{<span class="kk">"role"</span>:<span class="vv">"user"</span>,<span class="kk">"content"</span>:text}],
+  <span class="kk">output_format</span>=Contact,
+)
+c = resp.parsed_output   <span class="cc"># typed & valid</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="Prompt Chaining">
+    <div class="stage">
+      <span class="phase mech r" style="--i:0">⚙ Mechanism · one job per call</span>
+      <h2 class="headline r" style="--i:1">Split the task, gain <span class="k">reliability</span></h2>
+      <p class="sub r" style="--i:2">A giant "do everything" prompt fails in hard-to-debug ways. Break it into a chain where each step's output feeds the next — each is small, testable, and independently cacheable.</p>
+      <div class="r" style="--i:3;display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:18px">
+        <div class="node teal" style="flex:1;min-width:130px"><div class="lab">Step 1</div><div class="ttl">Extract facts</div></div><div class="ar h">→</div>
+        <div class="node" style="flex:1;min-width:130px"><div class="lab">Step 2</div><div class="ttl">Summarize facts</div></div><div class="ar h">→</div>
+        <div class="node" style="flex:1;min-width:130px"><div class="lab">Step 3</div><div class="ttl">Format as email</div></div>
+      </div>
+      <div class="note r" style="--i:4">Bonus: you can use a cheaper model (Haiku) for the easy steps and Opus only for the hard one.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="02" data-modlab="PROMPTING" data-title="Prompting Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls</span>
+      <h2 class="headline r" style="--i:1">What beginners get <span class="k">wrong</span></h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Avoid</h3><ul><li>SHOUTING "CRITICAL: YOU MUST" — modern Claude over-triggers on it</li><li>Dumping the whole knowledge base into every prompt</li><li>Prefilling the assistant turn to force format (now 400s)</li><li>Relying on prose parsing instead of a schema</li></ul></div>
+        <div class="panel good"><h3><span class="ic">✓</span>Instead</h3><ul><li>State each rule once, plainly</li><li>Load only the context this task needs</li><li>Use <code class="inl">output_config.format</code> / <code class="inl">parse()</code></li><li>Give examples of the edge case, not the obvious case</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 3 ============ -->
+  <section class="slide divider" data-mod="03" data-modlab="CONTEXT" data-divider="3" data-title="Module 3 — Context">
+    <div class="stage"><div class="divnum r" style="--i:0">03</div><div><div class="eyebrow r" style="--i:1">Module Three</div><h2 class="headline r" style="--i:2">Context, <span class="k">managed</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Tokens</span><span class="pill"><i></i>Window</span><span class="pill"><i></i>Caching</span><span class="pill"><i></i>Lifecycle</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="Tokens, Precisely">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism</span>
+        <h2 class="headline r" style="--i:1">Not words — <span class="k">tokens</span></h2>
+        <p class="sub r" style="--i:2">Tokens are sub-word pieces (~¾ word in English, but code and non-English split much finer). The <b>tokenizer is model-specific</b> — the same text costs different token counts on different Claude models.</p>
+        <div class="note crit r" style="--i:3">Never estimate Claude tokens with <code class="inl">tiktoken</code> — it under-counts by 15–20% on prose and far more on code.</div>
+      </div>
+      <div class="r" style="--i:3">
+        <div class="tag" style="margin-bottom:8px">"unbelievable" → 3 tokens · "北京" → 2+ · "  " ws → 1</div>
+        <div class="svgfig" style="margin-bottom:12px;padding:12px 14px">
+        <svg viewBox="0 0 420 92" role="img" aria-label="Sub-word tokenization diagram">
+          <text x="4" y="14" class="t-faint cap">text splits into sub-word pieces, not words</text>
+          <g font-size="12" transform="translate(0,24)">
+            <rect x="4"   y="0" width="34" height="26" rx="6" class="f-accs s-acc"/><text x="21"  y="18" text-anchor="middle" class="t-ink">un</text>
+            <rect x="42"  y="0" width="58" height="26" rx="6" class="f-accs s-acc"/><text x="71"  y="18" text-anchor="middle" class="t-ink">believ</text>
+            <rect x="104" y="0" width="42" height="26" rx="6" class="f-accs s-acc"/><text x="125" y="18" text-anchor="middle" class="t-ink">able</text>
+            <text x="156" y="18" class="t-acc">= 3 tokens</text>
+          </g>
+          <g font-size="12" transform="translate(0,58)">
+            <rect x="4"   y="0" width="28" height="26" rx="6" class="f-teals s-teal"/><text x="18"  y="18" text-anchor="middle" class="t-ink">北</text>
+            <rect x="36"  y="0" width="28" height="26" rx="6" class="f-teals s-teal"/><text x="50"  y="18" text-anchor="middle" class="t-ink">京</text>
+            <rect x="68"  y="0" width="44" height="26" rx="6" class="f-teals s-teal"/><text x="90"  y="18" text-anchor="middle" class="t-ink">_code</text>
+            <text x="120" y="18" class="t-teal">non-English &amp; code split much finer</text>
+          </g>
+        </svg>
+        </div>
+        <div class="spec">n = client.messages.<span class="kk">count_tokens</span>(
+  model=<span class="vv">"claude-opus-4-8"</span>,
+  messages=[{<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+             <span class="kk">"content"</span>: big_text}],
+).input_tokens
+<span class="cc"># exact, model-specific, free</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="The Context Window">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · the whole working set</span>
+      <h2 class="headline r" style="--i:1">What lives in the <span class="k">window</span></h2>
+      <div class="flow r" style="--i:2;margin-top:8px">
+        <div class="node hl" style="width:min(620px,94%)"><div class="lab">Context = one request's entire input</div><div class="ttl" style="font-family:var(--f-mono);font-size:.9rem">system prompt · tools · conversation history · retrieved docs · tool results · current message</div></div>
+      </div>
+      <div class="svgfig r" style="--i:3;margin-top:16px;max-width:720px;margin-left:auto;margin-right:auto">
+      <svg viewBox="0 0 440 214" role="img" aria-label="Context window and lost-in-the-middle attention">
+        <text x="20" y="14" class="t-teal cap">the model reads the whole window — but attends least to the middle</text>
+        <path d="M20 80 C 128 74 120 128 220 130 C 320 132 312 74 420 80" class="f-none s-acc" stroke-width="2"/>
+        <text x="20"  y="66" class="t-acc cap">strong</text>
+        <text x="392" y="66" class="t-acc cap">strong</text>
+        <line x1="220" y1="132" x2="220" y2="158" class="s-crit" stroke-width="1" stroke-dasharray="3 3"/>
+        <text x="176" y="150" class="t-crit cap">"lost in the middle"</text>
+        <rect x="20"  y="160" width="60"  height="30" class="f-teals"/>
+        <rect x="80"  y="160" width="120" height="30" class="f-accs"/>
+        <rect x="200" y="160" width="110" height="30" style="fill:var(--warn-soft)"/>
+        <rect x="310" y="160" width="60"  height="30" class="f-acc"/>
+        <rect x="370" y="160" width="50"  height="30" class="f-none s-line" stroke-dasharray="3 3"/>
+        <rect x="20"  y="160" width="400" height="30" class="f-none s-line"/>
+        <text x="26"  y="205" class="t-faint cap">system</text>
+        <text x="120" y="205" class="t-faint cap">history</text>
+        <text x="234" y="205" class="t-faint cap">docs</text>
+        <text x="316" y="205" class="t-faint cap">question</text>
+        <line x1="420" y1="154" x2="420" y2="196" class="s-crit" stroke-width="1.5"/>
+        <text x="392" y="150" class="t-crit cap">limit</text>
+      </svg>
+      </div>
+      <div class="cards r" style="--i:4;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:16px">
+        <div class="card"><div class="lab">Finite</div><p>Opus/Sonnet/Fable: up to <b>1M</b> tokens · Haiku: 200K. Input + output share it.</p></div>
+        <div class="card"><div class="lab">Ordered matters</div><p>Models attend less to the <b>middle</b> — put the question near the relevant material.</p></div>
+        <div class="card"><div class="lab">Costs every call</div><p>The window is re-sent and re-billed each turn. Caching (next) softens this.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="History = Resend">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · the illusion of memory</span>
+        <h2 class="headline r" style="--i:1">"Memory" is just <span class="k">resending</span></h2>
+        <p class="sub r" style="--i:2">The API is <b>stateless</b>. A chat feels continuous only because your code re-sends the whole history every turn. That means cost grows with conversation length — turn 20 pays for turns 1–19 again.</p>
+        <div class="note r" style="--i:3">This is exactly why caching and context-editing exist — to stop re-paying full price for the stable prefix.</div>
+      </div>
+      <div class="spec r" style="--i:3">msgs = []
+<span class="kk">def</span> <span class="nn">send</span>(text):
+    msgs.append({<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+                 <span class="kk">"content"</span>:text})
+    r = client.messages.create(
+        model=<span class="vv">"claude-opus-4-8"</span>,
+        max_tokens=<span class="nn">1024</span>, messages=msgs)
+    out = r.content[<span class="nn">0</span>].text
+    msgs.append({<span class="kk">"role"</span>:<span class="vv">"assistant"</span>,
+                 <span class="kk">"content"</span>:out})  <span class="cc"># ← key</span>
+    <span class="kk">return</span> out</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="Caching Mechanism">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · the prefix rule</span>
+        <h2 class="headline r" style="--i:1">Caching is a <span class="k">prefix match</span></h2>
+        <p class="sub r" style="--i:2">The API hashes the rendered prompt in order — <code class="inl">tools → system → messages</code>. A cached prefix replays at ~<b>0.1×</b> cost. But <b>any byte change anywhere in the prefix invalidates everything after it.</b></p>
+        <div class="note crit r" style="--i:3">A <code class="inl">datetime.now()</code> in your system prompt silently kills the cache on every request.</div>
+      </div>
+      <div class="svgfig r" style="--i:3">
+      <svg viewBox="0 0 440 196" role="img" aria-label="Prompt caching prefix diagram">
+        <text x="20" y="15" class="t-good cap">✓ HIT — the stable prefix is byte-identical</text>
+        <rect x="20" y="24" width="286" height="30" rx="6" class="f-goods s-good"/>
+        <text x="34" y="43" class="t-ink" font-size="11">🔒 [ tools + system ] frozen</text>
+        <rect x="312" y="24" width="108" height="30" rx="6" class="f-accs s-acc"/>
+        <text x="366" y="43" text-anchor="middle" class="t-acc" font-size="11">{ today Q }</text>
+        <text x="20" y="72" class="t-faint cap">prefix replays at ~0.1× · verify cache_read_input_tokens &gt; 0</text>
+        <text x="20" y="110" class="t-crit cap">✕ MISS — a moving value sits inside the prefix</text>
+        <rect x="20" y="119" width="286" height="30" rx="6" class="f-crits s-crit"/>
+        <text x="32" y="138" class="t-ink" font-size="11">[ system +</text>
+        <rect x="150" y="124" width="120" height="20" rx="4" class="f-crit"/>
+        <text x="210" y="138" text-anchor="middle" font-size="10" style="fill:#fff">datetime.now()</text>
+        <text x="278" y="138" class="t-ink" font-size="11">]</text>
+        <rect x="312" y="119" width="108" height="30" rx="6" class="f-none s-line" stroke-dasharray="4 4"/>
+        <text x="366" y="138" text-anchor="middle" class="t-faint" font-size="11">re-billed</text>
+        <text x="20" y="176" class="t-faint cap">changes every request → everything after it is re-processed</text>
+      </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="Caching in Code">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · up to 90% cheaper</span>
+        <h2 class="headline r" style="--i:1">Cache the big <span class="k">stable</span> part</h2>
+        <p class="sub r" style="--i:2">Mark stable content with <code class="inl">cache_control</code>. Economics: a write costs ~1.25× (5-min TTL); reads cost ~0.1×. It pays off from the <b>second</b> request on.</p>
+        <div class="note teal r" style="--i:3">Min cacheable prefix on Opus 4.8 is <b>4096 tokens</b> — shorter prefixes silently won't cache.</div>
+      </div>
+      <div class="spec r" style="--i:3">client.messages.create(
+  model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">1024</span>,
+  system=[{
+    <span class="kk">"type"</span>:<span class="vv">"text"</span>,
+    <span class="kk">"text"</span>: big_policy_doc,
+    <span class="kk">"cache_control"</span>:{<span class="kk">"type"</span>:<span class="vv">"ephemeral"</span>},
+  }],
+  messages=[{<span class="kk">"role"</span>:<span class="vv">"user"</span>,<span class="kk">"content"</span>:q}],
+)
+<span class="cc"># verify:</span>
+resp.usage.<span class="kk">cache_read_input_tokens</span>  <span class="cc"># &gt; 0 ✓</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="Lifecycle: Edit / Compact / Persist">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · the "M" in CALM</span>
+      <h2 class="headline r" style="--i:1">Three ways to manage a growing window</h2>
+      <table class="cmp r" style="--i:2;margin-top:14px">
+        <thead><tr><th>Tool</th><th>What it does</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><th>Context editing</th><td><b>Clears</b> stale tool results / thinking blocks</td><td>long tool-heavy runs; old results irrelevant</td></tr>
+          <tr><th>Compaction</th><td><b>Summarizes</b> earlier history server-side</td><td>conversation nearing the window limit</td></tr>
+          <tr><th>Memory</th><td><b>Persists</b> facts to files across sessions</td><td>state must outlive one session (→ Module 4)</td></tr>
+        </tbody>
+      </table>
+      <div class="note r" style="--i:3">Editing prunes, compaction summarizes (risking lost detail), memory persists. Long agents use all three.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="03" data-modlab="CONTEXT" data-title="Context Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls · silent invalidators</span>
+      <h2 class="headline r" style="--i:1">Why your cache hit-rate is <span class="k">zero</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));margin-top:14px">
+        <div class="card"><div class="lab">Moving values</div><p><code class="inl">datetime.now()</code> / UUIDs early in the prompt change the prefix every call.</p></div>
+        <div class="card"><div class="lab">Unsorted JSON</div><p><code class="inl">json.dumps(d)</code> without <code class="inl">sort_keys=True</code> → different bytes each time.</p></div>
+        <div class="card"><div class="lab">Varying tool set</div><p>Tools render at position 0 — add/remove/reorder and the whole cache dies.</p></div>
+        <div class="card"><div class="lab">Per-user prompt</div><p>Interpolating a user ID into <code class="inl">system</code> kills cross-user sharing.</p></div>
+      </div>
+      <div class="note crit r" style="--i:3">Diagnose: if <code class="inl">cache_read_input_tokens</code> is always 0, diff the rendered bytes of two requests.</div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 4 ============ -->
+  <section class="slide divider" data-mod="04" data-modlab="MEMORY" data-divider="4" data-title="Module 4 — Memory">
+    <div class="stage"><div class="divnum r" style="--i:0">04</div><div><div class="eyebrow r" style="--i:1">Module Four</div><h2 class="headline r" style="--i:2">Context <span class="k">vs</span> Memory</h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Stateless</span><span class="pill"><i></i>Stateful</span><span class="pill"><i></i>Persistent</span><span class="pill"><i></i>External / RAG</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="04" data-modlab="MEMORY" data-title="Context vs Memory">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · the key distinction</span>
+      <h2 class="headline r" style="--i:1"><span class="k">RAM</span> versus <span class="k2">hard disk</span></h2>
+      <table class="cmp r" style="--i:2;margin-top:14px">
+        <thead><tr><th></th><th>Context</th><th>Memory</th></tr></thead>
+        <tbody>
+          <tr><th>Lifespan</th><td>One request only</td><td>Across calls & sessions</td></tr>
+          <tr><th>Lives</th><td>Inside the prompt</td><td>Outside — files / DB / vectors</td></tr>
+          <tr><th>Held by</th><td>Sent every call</td><td>You store & reload it</td></tr>
+          <tr><th>Cost model</th><td>Tokens, every time</td><td>Storage — load only what's relevant</td></tr>
+        </tbody>
+      </table>
+      <div class="note r" style="--i:3">Every "memory" becomes context the instant you load it back into a prompt. Memory is a <b>you</b> problem, not a model feature.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="04" data-modlab="MEMORY" data-title="Stateless → Stateful">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism</span>
+        <h2 class="headline r" style="--i:1">You build the <span class="k">state</span></h2>
+        <p class="sub r" style="--i:2">The model is a pure function: same input → (roughly) same output, no side effects, no recall. Statefulness is a wrapper <b>you</b> write — hold the history, persist facts, reload them.</p>
+        <div class="note r" style="--i:3">A <code class="inl">ConversationManager</code> that appends every turn is the simplest stateful layer.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="kk">class</span> <span class="nn">Conversation</span>:
+  <span class="kk">def</span> __init__(self, system):
+    self.msgs, self.system = [], system
+  <span class="kk">def</span> <span class="nn">send</span>(self, text):
+    self.msgs += [{<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+                   <span class="kk">"content"</span>:text}]
+    r = client.messages.create(
+      model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">1024</span>,
+      system=self.system, messages=self.msgs)
+    ...  <span class="cc"># append assistant, return</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="04" data-modlab="MEMORY" data-title="External Memory / RAG">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · scale past the window</span>
+        <h2 class="headline r" style="--i:1">Store everything, <span class="k">retrieve</span> a little</h2>
+        <p class="sub r" style="--i:2">External memory keeps knowledge in a vector DB / files, and pulls only the top-k relevant chunks into context per query — <b>RAG</b>. Solves both finite-context and freshness.</p>
+        <div class="note teal r" style="--i:3">Claude also has a first-class <b>memory tool</b> (a <code class="inl">/memories</code> file directory) it reads/writes across sessions.</div>
+      </div>
+      <div class="flow r" style="--i:3">
+        <div class="node" style="width:100%"><div class="lab">Vector DB / files</div><div class="ttl">all your knowledge</div></div>
+        <div class="ar">↓ retrieve top-k for this question</div>
+        <div class="node hl" style="width:100%"><div class="lab">Context this call</div><div class="ttl">system + top-k chunks + question</div></div>
+        <div class="ar">↓</div>
+        <div class="node teal" style="width:100%"><div class="lab">Claude</div><div class="ttl">grounded, cited answer</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="04" data-modlab="MEMORY" data-title="Memory Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls</span>
+      <h2 class="headline r" style="--i:1">Memory that <span class="k">bites</span></h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Danger</h3><ul><li>Storing secrets / API keys / passwords in memory — they replay into every future context</li><li>Persisting PII without checking GDPR / CCPA</li><li>Unbounded history → context overflow + runaway cost</li><li>Trusting stale memory as current fact</li></ul></div>
+        <div class="panel good"><h3><span class="ic">✓</span>Do</h3><ul><li>Keep secrets in a vault, never in prompts/memory</li><li>Per-user memory dirs + access control</li><li>Summarize / expire old memory</li><li>Timestamp facts; re-verify before acting</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 5 ============ -->
+  <section class="slide divider" data-mod="05" data-modlab="TOOL USE" data-divider="5" data-title="Module 5 — Tool Use">
+    <div class="stage"><div class="divnum r" style="--i:0">05</div><div><div class="eyebrow r" style="--i:1">Module Five</div><h2 class="headline r" style="--i:2">Giving Claude <span class="k">hands</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>The loop</span><span class="pill"><i></i>Schema</span><span class="pill"><i></i>Tool runner</span><span class="pill"><i></i>Parallel</span><span class="pill"><i></i>Server tools</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Why Tools">
+    <div class="stage two">
+      <div><span class="phase con r" style="--i:0">◆ Concept</span>
+        <h2 class="headline r" style="--i:1">The model only makes <span class="k">text</span></h2>
+        <p class="sub r" style="--i:2">To touch the real world — live data, exact math, APIs, databases, sending mail — Claude emits a <b>request</b> to call a tool. <b>Your code</b> runs it and returns the result. Claude never executes anything itself.</p>
+        <div class="note r" style="--i:3">This split is the whole security model: you decide what tools exist and gate the dangerous ones.</div>
+      </div>
+      <div class="flow r" style="--i:3">
+        <div class="node teal" style="width:100%"><div class="lab">Claude</div><div class="ttl">"call get_weather(Paris)"</div></div>
+        <div class="ar">↓ your code executes</div>
+        <div class="node" style="width:100%"><div class="lab">Your app</div><div class="ttl">real weather API → 18°C</div></div>
+        <div class="ar">↓ return tool_result</div>
+        <div class="node hl" style="width:100%"><div class="lab">Claude</div><div class="ttl">"It's 18°C and clear in Paris."</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="The Loop, In JSON">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · the real wire format</span>
+        <h2 class="headline r" style="--i:1"><span class="k">tool_use</span> → <span class="k">tool_result</span></h2>
+        <p class="sub r" style="--i:2">When Claude wants a tool, <code class="inl">stop_reason</code> is <code class="inl">tool_use</code> and content holds a <code class="inl">tool_use</code> block (name + input + id). You run it, then append a <code class="inl">tool_result</code> keyed by that id. Loop until <code class="inl">end_turn</code>.</p>
+        <div class="note r" style="--i:3">Always append the <b>full</b> <code class="inl">response.content</code> back — it carries the tool_use block Claude needs to see.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="kk">while</span> <span class="nn">True</span>:
+  r = client.messages.create(
+    model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">2048</span>,
+    tools=tools, messages=msgs)
+  <span class="kk">if</span> r.stop_reason == <span class="vv">"end_turn"</span>: <span class="kk">break</span>
+  msgs.append({<span class="kk">"role"</span>:<span class="vv">"assistant"</span>,
+               <span class="kk">"content"</span>:r.content})
+  results = []
+  <span class="kk">for</span> b <span class="kk">in</span> r.content:
+    <span class="kk">if</span> b.type == <span class="vv">"tool_use"</span>:
+      out = run(b.name, b.input)
+      results.append({<span class="kk">"type"</span>:<span class="vv">"tool_result"</span>,
+        <span class="kk">"tool_use_id"</span>:b.id, <span class="kk">"content"</span>:out})
+  msgs.append({<span class="kk">"role"</span>:<span class="vv">"user"</span>,<span class="kk">"content"</span>:results})</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Tool Schema">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · the description IS the router</span>
+        <h2 class="headline r" style="--i:1">Write the <span class="k">description</span> for selection</h2>
+        <p class="sub r" style="--i:2">Claude picks tools from their <b>name + description</b>. Be prescriptive about <i>when</i> to call it, not just what it does. Add <code class="inl">strict: true</code> + <code class="inl">additionalProperties: false</code> to guarantee valid arguments.</p>
+        <div class="note teal r" style="--i:3">Control choice with <code class="inl">tool_choice</code>: <code class="inl">auto</code> (default) · <code class="inl">any</code> · <code class="inl">{type:"tool",name}</code> · <code class="inl">none</code>.</div>
+      </div>
+      <div class="spec r" style="--i:3">{
+  <span class="kk">"name"</span>:<span class="vv">"search_orders"</span>,
+  <span class="kk">"description"</span>:<span class="vv">"Look up a customer's</span>
+<span class="vv">   orders. Call this whenever the user</span>
+<span class="vv">   asks about order status or history."</span>,
+  <span class="kk">"strict"</span>:<span class="nn">true</span>,
+  <span class="kk">"input_schema"</span>:{
+    <span class="kk">"type"</span>:<span class="vv">"object"</span>,
+    <span class="kk">"properties"</span>:{<span class="kk">"email"</span>:{<span class="kk">"type"</span>:<span class="vv">"string"</span>}},
+    <span class="kk">"required"</span>:[<span class="vv">"email"</span>],
+    <span class="kk">"additionalProperties"</span>:<span class="nn">false</span>,
+  },
+}</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Tool Runner">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · skip the hand-written loop</span>
+        <h2 class="headline r" style="--i:1">Let the SDK <span class="k">drive</span> the loop</h2>
+        <p class="sub r" style="--i:2">The <b>tool runner</b> calls the API, executes your functions, feeds results back, and repeats until done — you just write the tool functions. It still exposes per-turn hooks for approval gates and retries.</p>
+        <div class="note r" style="--i:3">Drop to a manual loop only when you need control the runner doesn't expose (custom transport, avoiding the beta dependency).</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="kk">from</span> anthropic <span class="kk">import</span> beta_tool
+
+<span class="nn">@beta_tool</span>
+<span class="kk">def</span> <span class="nn">get_weather</span>(city: str) -> str:
+    <span class="vv">"""Current weather for a city."""</span>
+    <span class="kk">return</span> lookup(city)
+
+runner = client.beta.messages.<span class="kk">tool_runner</span>(
+  model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">2048</span>,
+  tools=[get_weather], messages=msgs)
+<span class="kk">for</span> msg <span class="kk">in</span> runner:  <span class="cc"># loop handled for you</span>
+    ...</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Parallel Tool Calls">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · faster, if independent</span>
+        <h2 class="headline r" style="--i:1">Many tools in <span class="k">one turn</span></h2>
+        <p class="sub r" style="--i:2">One assistant message can contain several <code class="inl">tool_use</code> blocks (default on). Run them concurrently — but you must return <b>all</b> the <code class="inl">tool_result</code> blocks in a <b>single</b> user message.</p>
+        <div class="note crit r" style="--i:3">Splitting results across multiple messages silently trains Claude to stop calling tools in parallel.</div>
+      </div>
+      <div class="spec r" style="--i:3"><span class="cc"># Claude asks for 3 cities at once</span>
+results = [
+  {<span class="kk">"type"</span>:<span class="vv">"tool_result"</span>,
+   <span class="kk">"tool_use_id"</span>:b.id,
+   <span class="kk">"content"</span>: run(b.name, b.input)}
+  <span class="kk">for</span> b <span class="kk">in</span> r.content
+  <span class="kk">if</span> b.type == <span class="vv">"tool_use"</span>
+]
+<span class="cc"># ALL results, ONE user message ↓</span>
+msgs.append({<span class="kk">"role"</span>:<span class="vv">"user"</span>,
+             <span class="kk">"content"</span>: results})</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Server-Side Tools">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · tools you don't have to run</span>
+      <h2 class="headline r" style="--i:1">Batteries Anthropic <span class="k">hosts</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin-top:16px">
+        <div class="card"><div class="lab">Web search / fetch</div><p>Fresh info past the cutoff, with citations. Runs server-side — just declare it.</p></div>
+        <div class="card"><div class="lab">Code execution</div><p>Sandboxed Python for exact math, data, charts. No client loop.</p></div>
+        <div class="card"><div class="lab">MCP connector</div><p>Reach a remote MCP server directly from the API (→ Module 6).</p></div>
+        <div class="card"><div class="lab">Memory tool</div><p>A <code class="inl">/memories</code> directory Claude reads & writes across sessions.</p></div>
+      </div>
+      <div class="note r" style="--i:3">Server tools have no client-side execution — declare them in <code class="inl">tools</code> and results arrive as content blocks. A long server-tool turn may pause with <code class="inl">stop_reason: pause_turn</code> — re-send to resume.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="05" data-modlab="TOOL USE" data-title="Tool Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls · SPIDER for tools</span>
+      <h2 class="headline r" style="--i:1">Isolate · Detect · Recover</h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Wrong</h3><ul><li>Giving one broad tool (raw <code class="inl">bash</code>) that can do anything, ungated</li><li>Trusting tool output blindly</li><li>Dropping a failed tool result instead of returning it</li><li>No loop cap → infinite tool loops</li></ul></div>
+        <div class="panel good"><h3><span class="ic">✓</span>Right</h3><ul><li>Least-privilege, action-specific tools; gate irreversible ones</li><li>Validate every result before acting on it</li><li>Return failures with <code class="inl">is_error: true</code> so Claude can retry</li><li>Cap iterations (<code class="inl">max_iters</code>)</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 6 ============ -->
+  <section class="slide divider" data-mod="06" data-modlab="MCP" data-divider="6" data-title="Module 6 — MCP">
+    <div class="stage"><div class="divnum r" style="--i:0">06</div><div><div class="eyebrow r" style="--i:1">Module Six</div><h2 class="headline r" style="--i:2">MCP — the <span class="k">USB-C</span> for AI</h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>N×M problem</span><span class="pill"><i></i>Client/server</span><span class="pill"><i></i>Primitives</span><span class="pill"><i></i>Connector code</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="06" data-modlab="MCP" data-title="Why MCP">
+    <div class="stage two">
+      <div><span class="phase con r" style="--i:0">◆ Concept · one protocol</span>
+        <h2 class="headline r" style="--i:1">Kill the <span class="k">N×M</span> problem</h2>
+        <p class="sub r" style="--i:2">Before MCP, connecting <b>N</b> AI apps to <b>M</b> tools meant N×M bespoke integrations. MCP is <b>one open protocol</b> (JSON-RPC) so any client can plug into any server — write once, connect to many. Exactly like USB-C replaced a drawer of chargers.</p>
+        <div class="note r" style="--i:3">Any MCP-compatible client (Claude Desktop, Claude Code, IDEs, the API connector) speaks to any MCP server.</div>
+      </div>
+      <div class="svgfig r" style="--i:3">
+      <svg viewBox="0 0 460 236" role="img" aria-label="MCP N by M wiring versus one hub">
+        <line x1="230" y1="18" x2="230" y2="206" class="s-line" stroke-dasharray="5 5"/>
+        <g class="s-crit" stroke-width="0.9" opacity="0.5">
+          <line x1="80" y1="62"  x2="150" y2="62"/><line x1="80" y1="62"  x2="150" y2="120"/><line x1="80" y1="62"  x2="150" y2="178"/>
+          <line x1="80" y1="120" x2="150" y2="62"/><line x1="80" y1="120" x2="150" y2="120"/><line x1="80" y1="120" x2="150" y2="178"/>
+          <line x1="80" y1="178" x2="150" y2="62"/><line x1="80" y1="178" x2="150" y2="120"/><line x1="80" y1="178" x2="150" y2="178"/>
+        </g>
+        <g font-size="10">
+          <rect x="30" y="50"  width="50" height="24" rx="6" class="f-surf s-line"/><text x="55" y="66"  text-anchor="middle" class="t-ink">App A</text>
+          <rect x="30" y="108" width="50" height="24" rx="6" class="f-surf s-line"/><text x="55" y="124" text-anchor="middle" class="t-ink">App B</text>
+          <rect x="30" y="166" width="50" height="24" rx="6" class="f-surf s-line"/><text x="55" y="182" text-anchor="middle" class="t-ink">App C</text>
+          <rect x="150" y="50"  width="52" height="24" rx="6" class="f-surf s-line"/><text x="176" y="66"  text-anchor="middle" class="t-dim">DB</text>
+          <rect x="150" y="108" width="52" height="24" rx="6" class="f-surf s-line"/><text x="176" y="124" text-anchor="middle" class="t-dim">Email</text>
+          <rect x="150" y="166" width="52" height="24" rx="6" class="f-surf s-line"/><text x="176" y="182" text-anchor="middle" class="t-dim">Files</text>
+        </g>
+        <text x="30" y="222" class="t-crit cap">Before · N × M custom integrations</text>
+        <g class="s-teal" stroke-width="1.4">
+          <line x1="300" y1="62"  x2="336" y2="118"/><line x1="300" y1="120" x2="332" y2="120"/><line x1="300" y1="178" x2="336" y2="122"/>
+          <line x1="372" y1="118" x2="406" y2="62"/><line x1="372" y1="120" x2="406" y2="120"/><line x1="372" y1="122" x2="406" y2="178"/>
+        </g>
+        <g font-size="10">
+          <rect x="252" y="50"  width="48" height="24" rx="6" class="f-surf s-line"/><text x="276" y="66"  text-anchor="middle" class="t-ink">App A</text>
+          <rect x="252" y="108" width="48" height="24" rx="6" class="f-surf s-line"/><text x="276" y="124" text-anchor="middle" class="t-ink">App B</text>
+          <rect x="252" y="166" width="48" height="24" rx="6" class="f-surf s-line"/><text x="276" y="182" text-anchor="middle" class="t-ink">App C</text>
+          <rect x="332" y="100" width="40" height="40" rx="9" class="f-teals s-teal" stroke-width="1.5"/><text x="352" y="124" text-anchor="middle" class="t-teal" font-size="10">MCP</text>
+          <rect x="406" y="50"  width="48" height="24" rx="6" class="f-surf s-line"/><text x="430" y="66"  text-anchor="middle" class="t-dim">DB</text>
+          <rect x="406" y="108" width="48" height="24" rx="6" class="f-surf s-line"/><text x="430" y="124" text-anchor="middle" class="t-dim">Email</text>
+          <rect x="406" y="166" width="48" height="24" rx="6" class="f-surf s-line"/><text x="430" y="182" text-anchor="middle" class="t-dim">Files</text>
+        </g>
+        <text x="252" y="222" class="t-good cap">After · one MCP protocol</text>
+      </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="06" data-modlab="MCP" data-title="MCP Architecture">
+    <div class="stage">
+      <span class="phase mech r" style="--i:0">⚙ Mechanism · client ↔ server</span>
+      <h2 class="headline r" style="--i:1">Host / Client ↔ <span class="k">Server</span></h2>
+      <div class="r" style="--i:2;display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-top:14px">
+        <div class="node teal"><div class="lab">Host / Client</div><div class="ttl">Claude Desktop · Claude Code · IDE · API</div><div class="desc">the AI app you use</div></div>
+        <div style="text-align:center;font-family:var(--f-mono);color:var(--accent)">◄── JSON-RPC ──►<br><span style="font-size:10px;color:var(--ink-faint)">stdio · HTTP/SSE</span></div>
+        <div class="node hl"><div class="lab">MCP Server</div><div class="ttl">exposes capabilities</div><div class="desc">runs where the data lives</div></div>
+      </div>
+      <div class="mech r" style="--i:3;margin-top:16px">
+        <div class="step"><b>Handshake</b> <span>— client & server negotiate capabilities</span></div>
+        <div class="step"><b>Discover</b> <span>— client lists the server's resources / tools / prompts</span></div>
+        <div class="step"><b>Invoke</b> <span>— model calls a tool; client relays it to the server</span></div>
+        <div class="step"><b>Return</b> <span>— server result flows back into the model's context</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="06" data-modlab="MCP" data-title="The Four Primitives">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · what a server exposes</span>
+      <h2 class="headline r" style="--i:1">Resources · Tools · Prompts · <span class="k">Sampling</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));margin-top:16px">
+        <div class="card"><div class="lab">Resources</div><h3>Read-only data</h3><p>Files, DB rows, docs the server can hand over as context. Like a GET.</p></div>
+        <div class="card"><div class="lab">Tools</div><h3>Actions</h3><p>Functions with effects the model can invoke. Like a POST.</p></div>
+        <div class="card"><div class="lab">Prompts</div><h3>Templates</h3><p>Reusable, parameterized prompt recipes the server offers.</p></div>
+        <div class="card"><div class="lab">Sampling</div><h3>Borrow the LLM</h3><p>The server asks the <b>client's</b> model to run a completion — client stays in control & can require approval.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="06" data-modlab="MCP" data-title="Transport · Auth · Security">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls · servers are trust boundaries</span>
+      <h2 class="headline r" style="--i:1">Transport, auth &amp; <span class="k">security</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(3,1fr);margin-top:14px">
+        <div class="card"><div class="lab">Transport</div><p><b>stdio</b> for local subprocess servers; <b>HTTP / SSE</b> for remote. Same protocol either way.</p></div>
+        <div class="card"><div class="lab">Auth</div><p>Remote servers use OAuth / bearer tokens. Keep credentials in a vault — never in the prompt.</p></div>
+        <div class="card"><div class="lab">Security</div><p>Least privilege, validate inputs, approve sensitive tools, beware prompt-injection via returned data.</p></div>
+      </div>
+      <div class="note crit r" style="--i:3">An MCP server can return text that <i>looks</i> like an instruction. Treat every server as a <b>trust boundary</b> (SPIDER · Isolate).</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="06" data-modlab="MCP" data-title="Using MCP from the API">
+    <div class="stage two">
+      <div><span class="phase lev r" style="--i:0">▸ Leverage · the MCP connector</span>
+        <h2 class="headline r" style="--i:1">Two halves, <span class="k">always together</span></h2>
+        <p class="sub r" style="--i:2">The API can connect straight to a remote MCP server. You must pass <b>both</b> <code class="inl">mcp_servers</code> (the connection) and a matching <code class="inl">mcp_toolset</code> in <code class="inl">tools</code> — omitting either is a validation error.</p>
+        <div class="note r" style="--i:3">In Claude Code you add servers via config instead — same protocol, no code.</div>
+      </div>
+      <div class="spec r" style="--i:3">client.beta.messages.create(
+  model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">1024</span>,
+  betas=[<span class="vv">"mcp-client-2025-11-20"</span>],
+  <span class="kk">mcp_servers</span>=[{
+    <span class="kk">"type"</span>:<span class="vv">"url"</span>, <span class="kk">"name"</span>:<span class="vv">"github"</span>,
+    <span class="kk">"url"</span>:<span class="vv">"https://.../mcp/"</span>}],
+  <span class="kk">tools</span>=[{<span class="kk">"type"</span>:<span class="vv">"mcp_toolset"</span>,
+          <span class="kk">"mcp_server_name"</span>:<span class="vv">"github"</span>}],
+  messages=msgs,
+)</div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 7 ============ -->
+  <section class="slide divider" data-mod="07" data-modlab="AGENTS" data-divider="7" data-title="Module 7 — Agents">
+    <div class="stage"><div class="divnum r" style="--i:0">07</div><div><div class="eyebrow r" style="--i:1">Module Seven</div><h2 class="headline r" style="--i:2">From answer to <span class="k">loop</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>The loop</span><span class="pill"><i></i>SPIDER</span><span class="pill"><i></i>4 approaches</span><span class="pill"><i></i>Guardrails</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="07" data-modlab="AGENTS" data-title="The Agent Loop">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · self-directed control flow</span>
+      <h2 class="headline r" style="--i:1">An agent runs until the <span class="k">goal is met</span></h2>
+      <div class="r" style="--i:2">
+        <div class="loop" id="agentLoop">
+          <div class="ring"></div><div class="ringspin"></div>
+          <div class="center">GOAL<br>↺ until done<br><span style="color:var(--crit)">or max-iters</span></div>
+          <div class="lp" data-a="0" style="left:50%;top:8%"><div class="s">PLAN</div><div class="n">Plan<small>break into steps</small></div></div>
+          <div class="lp" data-a="1" style="left:90%;top:38%"><div class="s">DECIDE</div><div class="n">Reason<small>pick next action</small></div></div>
+          <div class="lp" data-a="2" style="left:76%;top:86%"><div class="s">ACT</div><div class="n">Act<small>call a tool</small></div></div>
+          <div class="lp" data-a="3" style="left:24%;top:86%"><div class="s">OBSERVE</div><div class="n">Observe<small>read result</small></div></div>
+          <div class="lp" data-a="4" style="left:10%;top:38%"><div class="s">REFLECT</div><div class="n">Reflect<small>adjust plan</small></div></div>
+        </div>
+      </div>
+      <div class="note r" style="--i:3">Chatbot = one shot. Agent = many think→act→observe cycles driving its own control flow. Reasoning ↔ tools can repeat many times before a final answer.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="07" data-modlab="AGENTS" data-title="The Loop In Code">
+    <div class="stage two">
+      <div><span class="phase mech r" style="--i:0">⚙ Mechanism · it's the tool loop + a cap</span>
+        <h2 class="headline r" style="--i:1">An agent <span class="k">is</span> the tool loop</h2>
+        <p class="sub r" style="--i:2">There's no magic — the agent loop is the same <code class="inl">while stop_reason == "tool_use"</code> loop from Module 5, bounded by a hard iteration cap so it can never spin forever.</p>
+        <div class="note r" style="--i:3">Give it thinking (<code class="inl">adaptive</code>) + a generous <code class="inl">effort</code> so its planning is good, not just fast.</div>
+      </div>
+      <div class="spec r" style="--i:3">MAX = <span class="nn">12</span>
+<span class="kk">for</span> step <span class="kk">in</span> <span class="nn">range</span>(MAX):
+  r = client.messages.create(
+    model=<span class="vv">"claude-opus-4-8"</span>, max_tokens=<span class="nn">4096</span>,
+    output_config={<span class="kk">"effort"</span>:<span class="vv">"high"</span>},
+    tools=tools, messages=msgs)
+  <span class="kk">if</span> r.stop_reason == <span class="vv">"end_turn"</span>:
+    <span class="kk">break</span>              <span class="cc"># goal met</span>
+  ... run tools, append results ...
+<span class="kk">else</span>:
+  escalate(<span class="vv">"hit max iterations"</span>)  <span class="cc"># recover</span></div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="07" data-modlab="AGENTS" data-title="SPIDER in Practice">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · engineer for reliability</span>
+      <h2 class="headline r" style="--i:1">Agents fail in <span class="k">new ways</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));margin-top:14px">
+        <div class="card"><div class="lab">S · Scope</div><p>One clear job. No "God agent."</p></div>
+        <div class="card"><div class="lab">P · Plan</div><p>Decompose before acting.</p></div>
+        <div class="card"><div class="lab">I · Isolate</div><p>Least-privilege tools & subagents.</p></div>
+        <div class="card"><div class="lab">D · Detect</div><p>Validate every result & output.</p></div>
+        <div class="card"><div class="lab">E · Escalate</div><p>Risky action → human approval gate.</p></div>
+        <div class="card"><div class="lab">R · Recover</div><p>Retries, fallbacks, loop caps.</p></div>
+      </div>
+      <div class="note r" style="--i:3">Match rigor to blast radius: a read-only summarizer needs little; an agent that spends money or deletes data needs all six.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="07" data-modlab="AGENTS" data-title="Four Ways to Build One">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · pick your harness</span>
+      <h2 class="headline r" style="--i:1">Don't build an agent you <span class="k">don't need</span></h2>
+      <table class="cmp r" style="--i:2;margin-top:12px">
+        <thead><tr><th>Approach</th><th>You write</th><th>Use when</th></tr></thead>
+        <tbody>
+          <tr><th>Single call / workflow</th><td>The prompt (+ your own orchestration)</td><td>Most tasks — classify, extract, summarize, fixed pipelines</td></tr>
+          <tr><th>Manual tool loop</th><td>The whole <code class="inl">while</code> loop</td><td>You want to own every step of control flow</td></tr>
+          <tr><th>Tool Runner</th><td>Just the tool functions</td><td>A custom-tool agent without hand-writing the loop</td></tr>
+          <tr><th>Managed Agents</th><td>Config + tool results</td><td>Anthropic runs the loop + hosts a sandbox; persisted, scheduled</td></tr>
+        </tbody>
+      </table>
+      <div class="note r" style="--i:3">Start at the simplest tier. Only reach for an agent when the task is genuinely open-ended and model-driven.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="07" data-modlab="AGENTS" data-title="Agent Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls</span>
+      <h2 class="headline r" style="--i:1">Where agents go <span class="k">rogue</span></h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Failure modes</h3><ul><li>Infinite loops (no iteration cap)</li><li>Acting on hallucinated / bad tool data</li><li>Irreversible actions with no human gate</li><li>Scope creep — one agent trying to do everything</li><li>Runaway cost from high effort × long loops</li></ul></div>
+        <div class="panel good"><h3><span class="ic">✓</span>Guardrails</h3><ul><li>Hard <code class="inl">max_iters</code> + task budget</li><li>Validate results; distrust surprising ones</li><li>Approval gate on spend / delete / send</li><li>One responsibility per agent</li><li>Tune effort to the task, not always <code class="inl">max</code></li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 8 ============ -->
+  <section class="slide divider" data-mod="08" data-modlab="SUBAGENTS" data-divider="8" data-title="Module 8 — Subagents">
+    <div class="stage"><div class="divnum r" style="--i:0">08</div><div><div class="eyebrow r" style="--i:1">Module Eight</div><h2 class="headline r" style="--i:2">A <span class="k">team</span> of agents</h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Delegate</span><span class="pill"><i></i>Isolate</span><span class="pill"><i></i>Fan-out</span><span class="pill"><i></i>Aggregate</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="08" data-modlab="SUBAGENTS" data-title="Orchestrator & Workers">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · decompose → fan-out → synthesize</span>
+      <h2 class="headline r" style="--i:1">One <span class="k">manager</span>, many <span class="k2">specialists</span></h2>
+      <div class="org r" style="--i:2;margin-top:12px">
+        <div class="node hl" style="min-width:200px;text-align:center"><div class="lab">Orchestrator</div><div class="ttl">Lead agent · plans & merges</div></div>
+        <div class="fan" style="margin:4px 0"><span>↙</span><span>↓</span><span>↘</span></div>
+        <div class="orgrow">
+          <div class="worker"><div class="wl">Subagent</div>Researcher A<br><small style="color:var(--ink-faint)">own context</small></div>
+          <div class="worker"><div class="wl">Subagent</div>Researcher B<br><small style="color:var(--ink-faint)">in parallel</small></div>
+          <div class="worker"><div class="wl">Subagent</div>Researcher C<br><small style="color:var(--ink-faint)">isolated</small></div>
+        </div>
+        <div class="fan" style="margin:4px 0"><span>↘</span><span>↓</span><span>↙</span></div>
+        <div class="node teal" style="min-width:200px;text-align:center"><div class="lab">Fan-in</div><div class="ttl">Aggregate → one cited answer</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="08" data-modlab="SUBAGENTS" data-title="Why Subagents">
+    <div class="stage">
+      <span class="phase mech r" style="--i:0">⚙ Mechanism · four real reasons</span>
+      <h2 class="headline r" style="--i:1">Not just speed — <span class="k">clean context</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin-top:16px">
+        <div class="card"><div class="lab">Specialization</div><p>Each subagent has one job + only the tools it needs (SPIDER · Scope).</p></div>
+        <div class="card"><div class="lab">Context isolation</div><p>Each gets a <b>clean window</b> — no overflow, no cross-contamination of the main thread.</p></div>
+        <div class="card"><div class="lab">Parallelism</div><p>Independent subtasks run at once — the win for research & big sweeps.</p></div>
+        <div class="card"><div class="lab">Containment</div><p>One subagent failing doesn't poison the whole run.</p></div>
+      </div>
+      <div class="note teal r" style="--i:3">Bonus: subagents dodge a caching gotcha — instead of switching models mid-thread (which kills the cache), spawn a subagent on the cheaper model.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="08" data-modlab="SUBAGENTS" data-title="Multi-Agent Patterns">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · four shapes</span>
+      <h2 class="headline r" style="--i:1">Router · Pipeline · Parallel · <span class="k">Orchestrator</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));margin-top:14px">
+        <div class="card"><div class="lab">Router</div><p>Classify the request, hand to the right specialist. (Support triage.)</p></div>
+        <div class="card"><div class="lab">Pipeline</div><p>Chain stages, each output feeds the next. (Extract → analyze → format.)</p></div>
+        <div class="card"><div class="lab">Parallel / fan-out</div><p>Many independent workers at once, then merge. (Research, audits.)</p></div>
+        <div class="card"><div class="lab">Orchestrator-worker</div><p>Lead plans sub-questions, spawns workers, synthesizes. (Research system.)</p></div>
+      </div>
+      <div class="note r" style="--i:3">Dependent work stays sequential (pipeline); only truly independent work fans out.</div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="08" data-modlab="SUBAGENTS" data-title="Subagent Pitfalls">
+    <div class="stage">
+      <span class="phase pit r" style="--i:0">✕ Pitfalls</span>
+      <h2 class="headline r" style="--i:1">The cost of a <span class="k">crowd</span></h2>
+      <div class="gb r" style="--i:2;margin-top:14px">
+        <div class="panel bad"><h3><span class="ic">✕</span>Watch out</h3><ul><li>More agents = more tokens & coordination overhead</li><li>Aggregation is the hard part — merging is where quality is lost</li><li>Spawning subagents for trivial, sequential work</li><li>Duplicated effort when tasks overlap</li></ul></div>
+        <div class="panel good"><h3><span class="ic">✓</span>Do</h3><ul><li>Use subagents for big, parallel, or isolation-needing jobs only</li><li>Give the synthesizer a clear dedupe + merge spec</li><li>Keep single-file / sequential work in the main agent</li><li>Scope each subtask so they don't overlap</li></ul></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 9 ============ -->
+  <section class="slide divider" data-mod="09" data-modlab="ARCHITECTURE" data-divider="9" data-title="Module 9 — Architecture">
+    <div class="stage"><div class="divnum r" style="--i:0">09</div><div><div class="eyebrow r" style="--i:1">Module Nine</div><h2 class="headline r" style="--i:2">Everything, <span class="k">connected</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>End-to-end</span><span class="pill"><i></i>Worked example</span><span class="pill"><i></i>Framework map</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="09" data-modlab="ARCHITECTURE" data-title="End-to-End Flow">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · the whole machine</span>
+      <h2 class="headline r" style="--i:1">One request, <span class="k">end to end</span></h2>
+      <div class="r" style="--i:2;display:grid;grid-template-columns:1fr;gap:0;margin-top:10px;justify-items:center">
+        <div class="node" style="width:min(540px,94%)"><div class="ttl" style="text-align:center">User → Prompt</div><div class="desc" style="text-align:center">the text request</div></div>
+        <div class="ar">↓</div>
+        <div class="node teal" style="width:min(540px,94%)"><div class="ttl" style="text-align:center">System Prompt → Context (CALM)</div><div class="desc" style="text-align:center">persona + rules · assemble the finite window · cache the stable prefix</div></div>
+        <div class="ar">↓</div>
+        <div class="node hl" style="width:min(540px,94%)"><div class="ttl" style="text-align:center">Reasoning → "Need tools?"</div></div>
+        <div class="r" style="--i:3;display:grid;grid-template-columns:1fr 1fr;gap:12px;width:min(560px,96%);margin-top:8px">
+          <div class="node" style="border-color:var(--crit-soft)"><div class="lab" style="color:var(--crit)">NO</div><div class="ttl">→ Respond</div></div>
+          <div class="node" style="border-color:var(--accent-line)"><div class="lab" style="color:var(--accent)">YES</div><div class="ttl">MCP / Tools → Agent → Subagents</div><div class="desc">act · observe · loop back into context</div></div>
+        </div>
+        <div class="ar r" style="--i:4">↓ loop until done ↓</div>
+        <div class="node r" style="--i:4;width:min(540px,94%);border-color:var(--teal)"><div class="ttl" style="text-align:center">Response → User</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="09" data-modlab="ARCHITECTURE" data-title="Worked Example">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · trace one real request</span>
+      <h2 class="headline r" style="--i:1">"Summarize our 3 competitors' new features."</h2>
+      <div class="mech r" style="--i:2;margin-top:12px">
+        <div class="step"><b>Prompt + System</b> <span>— persona "market analyst," rules, output shape</span></div>
+        <div class="step"><b>Context (CALM)</b> <span>— stable system cached; today's ask appended after the prefix</span></div>
+        <div class="step"><b>Reason → need tools?</b> <span>— yes: it needs fresh, external info</span></div>
+        <div class="step"><b>Agent + Subagents</b> <span>— lead spawns 3 researchers (one per competitor) in parallel via web search / MCP</span></div>
+        <div class="step"><b>Observe & aggregate</b> <span>— results flow back; lead dedupes and synthesizes</span></div>
+        <div class="step"><b>Respond</b> <span>— a one-page summary; usage reports the token cost</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="09" data-modlab="ARCHITECTURE" data-title="Framework Map">
+    <div class="stage">
+      <span class="phase con r" style="--i:0">◆ Concept · each stage has a guardian</span>
+      <h2 class="headline r" style="--i:1">Where each framework <span class="k">governs</span></h2>
+      <div class="r" style="--i:2;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:16px">
+        <div class="fwcard"><div class="name" style="font-size:1.2rem">PRECISE</div><p style="color:var(--ink-dim);font-size:.9rem;margin:8px 0 0">governs the <b>prompt</b> stage</p></div>
+        <div class="fwcard"><div class="name" style="font-size:1.2rem">CALM</div><p style="color:var(--ink-dim);font-size:.9rem;margin:8px 0 0">governs <b>context</b> assembly & caching</p></div>
+        <div class="fwcard"><div class="name" style="font-size:1.2rem">SPIDER</div><p style="color:var(--ink-dim);font-size:.9rem;margin:8px 0 0">governs <b>tools · agents · subagents</b></p></div>
+      </div>
+      <div class="note r" style="--i:3">If you can draw the end-to-end flow and name the framework at each stage, you understand the whole platform.</div>
+    </div>
+  </section>
+
+  <!-- ============ MODULE 10 ============ -->
+  <section class="slide divider" data-mod="10" data-modlab="EXAM PREP" data-divider="10" data-title="Module 10 — Exam Prep">
+    <div class="stage"><div class="divnum r" style="--i:0">10</div><div><div class="eyebrow r" style="--i:1">Module Ten</div><h2 class="headline r" style="--i:2">Pass the <span class="k">exam</span></h2><div class="divlist r" style="--i:3"><span class="pill"><i></i>Facts</span><span class="pill"><i></i>Domains</span><span class="pill"><i></i>Scenarios</span><span class="pill"><i></i>Cheat-sheets</span></div></div></div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="Exam — Official vs Rumor">
+    <div class="stage two">
+      <div><span class="phase con r" style="--i:0">◆ Concept · know what's confirmed</span>
+        <h2 class="headline r" style="--i:1">Official <span class="k">fact</span> vs <span style="color:var(--warn)">rumor</span></h2>
+        <div class="r" style="--i:2;display:flex;flex-direction:column;gap:9px;margin-top:8px">
+          <div><span class="status off">official</span> Anthropic-administered · Pearson VUE · partner-gated</div>
+          <div><span class="status off">official</span> Four areas: Claude Code · Agent SDK · API · MCP</div>
+          <div><span class="status un">unverified</span> ~60 Q · 120 min · pass ~720/1000</div>
+          <div><span class="status un">unverified</span> "CCA-F" acronym · the domain %s →</div>
+        </div>
+        <div class="note r" style="--i:3">Sole source of truth: the official Exam Guide PDF on the Anthropic Partner Academy.</div>
+      </div>
+      <div class="r" style="--i:2;display:flex;flex-direction:column;align-items:center;gap:14px">
+        <div class="donut"><div class="mid">reported<br>weights<br><span style="color:var(--warn)">(unverified)</span></div></div>
+        <div class="leg">
+          <div><i style="background:var(--accent)"></i>Agentic Architecture · 27%</div>
+          <div><i style="background:var(--teal)"></i>Claude Code Config · 20%</div>
+          <div><i style="background:var(--warn)"></i>Prompt Engineering · 20%</div>
+          <div><i style="background:var(--violet)"></i>Tool Design & MCP · 18%</div>
+          <div><i style="background:var(--good)"></i>Context & Reliability · 15%</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="Domain Checklist">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · what to be able to do</span>
+      <h2 class="headline r" style="--i:1">Can you <span class="k">do</span> each of these?</h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:14px">
+        <div class="card"><div class="lab">Prompting</div><p>Apply PRECISE · force JSON with a schema · few-shot the edge case.</p></div>
+        <div class="card"><div class="lab">Context</div><p>Explain the prefix rule · verify a cache hit · pick edit vs compact vs memory.</p></div>
+        <div class="card"><div class="lab">Tools & MCP</div><p>Trace the tool_use/tool_result loop · wire an MCP connector · isolate a server.</p></div>
+        <div class="card"><div class="lab">Agents</div><p>Choose loop / runner / managed · apply SPIDER · cap iterations.</p></div>
+        <div class="card"><div class="lab">Subagents</div><p>Decompose → fan-out → synthesize · when NOT to.</p></div>
+        <div class="card"><div class="lab">Models</div><p>Pick Opus/Sonnet/Haiku/Fable by cost, speed & difficulty.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="The 6 Scenarios">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · the exam is scenario-based</span>
+      <h2 class="headline r" style="--i:1">Scenario → <span class="k">right pattern</span></h2>
+      <table class="cmp r" style="--i:2;margin-top:12px">
+        <thead><tr><th>Scenario</th><th>Reach for</th><th>Top pitfall</th></tr></thead>
+        <tbody>
+          <tr><th>Support resolution agent</th><td>Router + tools + human gate</td><td>No approval on refunds</td></tr>
+          <tr><th>Code gen with Claude Code</th><td>Config + PRECISE prompts</td><td>Over-forcing instructions</td></tr>
+          <tr><th>Multi-agent research</th><td>Decompose → fan-out → synthesize</td><td>Weak aggregation</td></tr>
+          <tr><th>Structured extraction</th><td>Schema output + caching</td><td>Parsing prose, cache misses</td></tr>
+          <tr><th>Claude Code for CI</th><td>Hooks + permissions</td><td>Too-broad tool access</td></tr>
+          <tr><th>Dev productivity</th><td>Config + skills</td><td>Ignoring context limits</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="Decision Cheat-Sheets">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · when-to-use, at a glance</span>
+      <h2 class="headline r" style="--i:1">The four <span class="k">decisions</span></h2>
+      <div class="cards r" style="--i:2;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:14px">
+        <div class="card"><div class="lab">Which model?</div><p>Hard/long-horizon → <b>Opus 4.8</b> (or Fable 5). Volume/coding value → <b>Sonnet 5</b>. Simple/fast → <b>Haiku 4.5</b>.</p></div>
+        <div class="card"><div class="lab">Cache or not?</div><p>Large stable prefix reused ≥2× → cache. Prefix changes every call → don't (pure write cost).</p></div>
+        <div class="card"><div class="lab">Tool vs MCP?</div><p>One-off, in-process → a plain tool. Reusable across apps / external system → an MCP server.</p></div>
+        <div class="card"><div class="lab">Agent or not?</div><p>Fixed steps → workflow. Open-ended, model-driven, recoverable errors → agent.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="Study Plan">
+    <div class="stage">
+      <span class="phase lev r" style="--i:0">▸ Leverage · a 2-week sprint</span>
+      <h2 class="headline r" style="--i:1">Two weeks to <span class="k">ready</span></h2>
+      <table class="cmp r" style="--i:2;margin-top:12px">
+        <thead><tr><th>Days</th><th>Focus</th><th>Outcome</th></tr></thead>
+        <tbody>
+          <tr><th>1–3</th><td>Frameworks + Modules 1–3</td><td>Recall PRECISE / CALM / SPIDER; explain caching</td></tr>
+          <tr><th>4–7</th><td>Tools + MCP (5–6)</td><td>Trace the loop; wire a connector</td></tr>
+          <tr><th>8–10</th><td>Agents + Subagents (7–8)</td><td>Choose a harness; apply SPIDER</td></tr>
+          <tr><th>11–12</th><td>Architecture + scenarios (9)</td><td>Draw end-to-end; map each of the 6 scenarios</td></tr>
+          <tr><th>13–14</th><td>Timed mocks</td><td>Score ≥ 750 before booking</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="slide" data-mod="10" data-modlab="EXAM PREP" data-title="You're Ready">
+    <div class="stage cover">
+      <div class="eyebrow r" style="--i:0">Recall from memory</div>
+      <h2 class="big r" style="--i:1;font-size:clamp(1.9rem,6.5vw,4rem)">You can build the <span class="k">whole machine</span></h2>
+      <div class="fw r" style="--i:2"><span class="pill"><i></i>PRECISE → prompts</span><span class="pill"><i style="background:var(--teal)"></i>CALM → context</span><span class="pill"><i style="background:var(--warn)"></i>SPIDER → agents</span></div>
+      <p class="sub r" style="--i:3;max-width:54ch;text-align:center">Prompt → Context → Reason → Tools/MCP → Agent → Subagents → Response. Know the mechanism, wield the code, dodge the pitfalls — that's the whole exam, and the whole job.</p>
+      <div class="mono-line r" style="--i:4">press <span class="k">M</span> to review · good luck</div>
+    </div>
+  </section>
+
+  </div>
+
+  <div class="menu" id="menu">
+    <button class="btn menuclose" id="menuClose">✕ close</button>
+    <h2>Slide Overview</h2>
+    <div class="menugrid" id="menugrid"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var total = slides.length, cur = 0;
+  var prog=document.getElementById('prog'), count=document.getElementById('count'),
+      modtag=document.getElementById('modtag'), menu=document.getElementById('menu');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function pad(n){return (n<10?'0':'')+n;}
+  count.innerHTML='<b>01</b> / '+total;
+
+  function show(i){
+    i=Math.max(0,Math.min(total-1,i));
+    slides[cur].classList.remove('active');
+    cur=i; var s=slides[cur]; s.classList.add('active');
+    prog.style.width=(cur/(total-1)*100)+'%';
+    count.innerHTML='<b>'+pad(cur+1)+'</b> / '+total;
+    modtag.innerHTML='<b>MODULE '+(s.dataset.mod||'00')+'</b> · '+(s.dataset.modlab||'');
+    resetInteractives(s); markMenu();
+  }
+  function next(){show(cur+1);} function prev(){show(cur-1);}
+
+  document.addEventListener('keydown',function(e){
+    if(menu.classList.contains('open')){ if(e.key==='Escape'||e.key.toLowerCase()==='m'){toggleMenu(false);} return; }
+    switch(e.key){
+      case 'ArrowRight': case ' ': case 'PageDown': case 'l': next(); e.preventDefault(); break;
+      case 'ArrowLeft': case 'PageUp': case 'h': prev(); e.preventDefault(); break;
+      case 'Home': show(0); break; case 'End': show(total-1); break;
+      case 'm': case 'M': toggleMenu(true); break;
+      case 't': case 'T': toggleTheme(); break;
+      default: if(/^[0-9]$/.test(e.key)){ jumpModule(e.key==='0'?10:parseInt(e.key,10)); }
+    }
+  });
+  document.getElementById('nextBtn').onclick=next;
+  document.getElementById('prevBtn').onclick=prev;
+
+  var dividers={};
+  slides.forEach(function(s,idx){ if(s.dataset.divider){dividers[s.dataset.divider]=idx;} });
+  function jumpModule(n){ if(dividers[n]!=null) show(dividers[n]); }
+
+  function currentThemeDark(){ var set=document.documentElement.getAttribute('data-theme'); if(set) return set==='dark'; return window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  function toggleTheme(){ document.documentElement.setAttribute('data-theme', currentThemeDark()?'light':'dark'); }
+  document.getElementById('themeBtn').onclick=toggleTheme;
+
+  var menugrid=document.getElementById('menugrid');
+  slides.forEach(function(s,idx){
+    var b=document.createElement('button'); b.className='mi';
+    b.innerHTML='<span class="mn">'+pad(idx+1)+' · M'+(s.dataset.mod||'00')+'</span><span class="mt">'+(s.dataset.title||'')+'</span>';
+    b.onclick=function(){show(idx);toggleMenu(false);};
+    menugrid.appendChild(b);
+  });
+  var menuItems=Array.prototype.slice.call(menugrid.children);
+  function markMenu(){ menuItems.forEach(function(m,i){m.classList.toggle('cur',i===cur);}); }
+  function toggleMenu(open){ menu.classList.toggle('open',open); if(open) markMenu(); }
+  document.getElementById('menuBtn').onclick=function(){toggleMenu(true);};
+  document.getElementById('menuClose').onclick=function(){toggleMenu(false);};
+  menu.addEventListener('click',function(e){ if(e.target===menu) toggleMenu(false); });
+
+  var mods=[
+    ['01','Foundations','How Claude works',5],
+    ['02','Prompting','PRECISE · XML · schema',12],
+    ['03','Context','Tokens · caching',20],
+    ['04','Memory','Context vs memory',28],
+    ['05','Tool Use','The loop · runner',33],
+    ['06','MCP','USB-C for AI',41],
+    ['07','Agents','Loop · SPIDER',48],
+    ['08','Subagents','Fan-out · aggregate',55],
+    ['09','Architecture','End to end',61],
+    ['10','Exam Prep','Facts · cheat-sheets',65]
+  ];
+  var mg=document.getElementById('modgrid');
+  mods.forEach(function(m){
+    var b=document.createElement('button'); b.className='modcell';
+    b.innerHTML='<span class="n">MODULE '+m[0]+'</span><span class="t">'+m[1]+'</span><span class="d">'+m[2]+'</span>';
+    b.onclick=function(){ jumpModule(parseInt(m[0],10)); };
+    mg.appendChild(b);
+  });
+
+  var loopNodes=Array.prototype.slice.call(document.querySelectorAll('#agentLoop .lp'));
+  var loopIdx=0, loopTimer=null;
+  function stepLoop(){ loopNodes.forEach(function(el,i){el.classList.toggle('on',i===loopIdx);}); loopIdx=(loopIdx+1)%loopNodes.length; }
+  function resetInteractives(s){
+    if(loopTimer){clearInterval(loopTimer);loopTimer=null;}
+    if(s.querySelector('#agentLoop')){ loopIdx=0; stepLoop(); if(!reduce){ loopTimer=setInterval(stepLoop,1100); } }
+  }
+
+  var tx=null;
+  document.addEventListener('touchstart',function(e){tx=e.touches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',function(e){ if(tx==null)return; var dx=e.changedTouches[0].clientX-tx; if(Math.abs(dx)>60){dx<0?next():prev();} tx=null; },{passive:true});
+
+  show(0);
+})();
+</script>
+</body>
+</html>
