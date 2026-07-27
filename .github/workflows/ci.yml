@@ -1,0 +1,31 @@
+name: CI
+
+# Syntax check + offline test suite. No secrets required — the suite is key-free (FakeProvider),
+# so LLM demos are intentionally not run here.
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install (base + MCP + dev)
+        run: pip install -e ".[mcp,dev]"
+
+      - name: Syntax check
+        run: python -m compileall -q core providers topics mcp evals
+
+      - name: Test suite (offline, no API key)
+        run: pytest -q

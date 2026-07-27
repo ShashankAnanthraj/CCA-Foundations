@@ -168,3 +168,39 @@ class LLMProvider(ABC):
             else:
                 out.append({"role": m["role"], "content": m["content"]})
         return out
+
+
+# --------------------------------------------------------------------------- #
+# Provider selection (factory) — keeps the model/vendor swap to one env var.
+# Imports are lazy so `core` never imports a vendor SDK at module load (ADR 0001):
+# each adapter module — the only place allowed to import its SDK — is imported on demand.
+# --------------------------------------------------------------------------- #
+# provider name -> (module path, class name). Imported lazily so `core` never loads a vendor SDK
+# at module import (ADR 0001). Add a row to support a new provider.
+_ADAPTERS = {
+    "claude": ("providers.claude", "ClaudeProvider"),
+    "openrouter": ("providers.openrouter", "OpenRouterProvider"),
+    "groq": ("providers.groq", "GroqProvider"),
+}
+
+
+def get_provider_class(name: str | None = None) -> type[LLMProvider]:
+    """Return the adapter CLASS for `name` (or the configured provider). No key required —
+    use this for the offline model-catalog / pricing sections of demos."""
+    import importlib
+
+    from core.config import get_settings
+
+    name = (name or get_settings().provider).lower()
+    entry = _ADAPTERS.get(name)
+    if entry is None:
+        raise ValueError(
+            f"unknown provider {name!r} (set AI_OS_PROVIDER to one of: {', '.join(_ADAPTERS)})"
+        )
+    module, cls = entry
+    return getattr(importlib.import_module(module), cls)
+
+
+def get_provider(name: str | None = None) -> LLMProvider:
+    """Construct the configured provider. The adapter resolves its own key from the environment."""
+    return get_provider_class(name)()

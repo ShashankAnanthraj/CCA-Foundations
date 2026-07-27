@@ -18,7 +18,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from core import ChatMessage, ToolCall, ToolSpec, get_settings  # noqa: E402
-from providers.claude import ClaudeProvider                     # noqa: E402
+from core import get_provider                     # noqa: E402
 
 # 1) Define tools (schema the model sees) ---------------------------------- #
 TOOLS = [
@@ -64,7 +64,7 @@ def main() -> None:
     if not settings.has_api_key:
         print("Set ANTHROPIC_API_KEY in .env to run this demo.")
         return
-    provider = ClaudeProvider()
+    provider = get_provider()
 
     hr("Agentic tool loop — model calls tools, your code runs them, loop repeats")
     task = "What is 15 + 27, and what's the weather in Paris right now?"

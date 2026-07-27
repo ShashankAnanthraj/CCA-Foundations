@@ -20,9 +20,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from core import get_settings                       # noqa: E402
-from core.providers import ChatMessage, LLMResponse  # noqa: E402
-from providers.claude import ClaudeProvider          # noqa: E402
+from core import get_provider, get_provider_class, get_settings  # noqa: E402
+from core.providers import ChatMessage, LLMProvider, LLMResponse  # noqa: E402
 
 BASE_SYSTEM = (ROOT / "prompts" / "base" / "base_system.md").read_text(encoding="utf-8")
 
@@ -31,7 +30,7 @@ def hr(title: str) -> None:
     print(f"\n{'=' * 68}\n{title}\n{'=' * 68}")
 
 
-def show(provider: ClaudeProvider, resp: LLMResponse) -> None:
+def show(provider: LLMProvider, resp: LLMResponse) -> None:
     """Uniformly print a response with its usage + estimated cost."""
     u = resp.usage
     cost = provider.estimate_cost(u, resp.model)
@@ -52,13 +51,13 @@ def main() -> None:
             "Showing the model catalog only (no API calls):\n"
         )
 
-    provider = ClaudeProvider() if settings.has_api_key else None
+    provider = get_provider() if settings.has_api_key else None
     model = settings.default_model
     max_tokens = settings.max_tokens
 
     # 1) MODEL CATALOG & PRICING -------------------------------------------- #
     hr("1) Models & pricing ($ per 1M tokens)  —  choosing the right model")
-    for m, (inp, out) in ClaudeProvider.pricing.items():
+    for m, (inp, out) in get_provider_class().pricing.items():
         marker = "  <- default" if m == model else ""
         print(f"  {m:20s}  in ${inp:<6}  out ${out}{marker}")
 
@@ -93,7 +92,8 @@ def main() -> None:
 
     # 5) THINKING + EFFORT -------------------------------------------------- #
     hr("5) Adaptive thinking + effort (quality vs cost/latency)")
-    reasoning_q = "A bat and ball cost $1.10. The bat costs $1 more than the ball. Ball price?"
+    reasoning_q = "A bat and ball cost $3.10. The bat costs $2 more than the ball. Ball price?"
+    print(f"  Question: {reasoning_q}")
     resp2 = provider.chat(
         [ChatMessage("user", reasoning_q)],
         system=BASE_SYSTEM,

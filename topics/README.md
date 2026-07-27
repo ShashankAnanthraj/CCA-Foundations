@@ -22,3 +22,8 @@ Build order is foundational → advanced; each topic ships something you can dem
 | 12 | Production & Platform | Batches, files, cost/observability, security, migration | — | ✅ Done |
 
 **Run any topic:** `python topics/NN-<topic>/demo.py` (needs `.env` with `ANTHROPIC_API_KEY`).
+
+> The **CCA‑F domain** weights above are third-party/**unverified** — the project is built to them, but
+> the official blueprint is partner-gated. **Studying for the exam?** See [../docs/exam/](../docs/exam/):
+> coverage map, gap analysis, and a reconciliation of the coined frameworks (PRECISE/SPIDER/CALM) and
+> abstractions with real Anthropic terminology.

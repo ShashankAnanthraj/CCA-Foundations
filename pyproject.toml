@@ -11,6 +11,10 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0"]
+# The `openai` SDK powers every OpenAI-compatible provider (OpenRouter, Groq, …). The extras below
+# install the same package; they exist for discoverability.
+openrouter = ["openai>=1.0"]
+groq = ["openai>=1.0"]
 dev = ["pytest>=8.0"]
 
 [build-system]
@@ -20,7 +24,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 # Packages are importable from the repo root. `topics/` are runnable scripts,
 # not importable packages (folder names start with digits by design).
-packages = ["core", "providers"]
+packages = ["core", "providers", "evals"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

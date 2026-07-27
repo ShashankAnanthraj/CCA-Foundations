@@ -19,11 +19,13 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from core import Conversation, get_settings  # noqa: E402
-from core.providers import ChatMessage        # noqa: E402
-from providers.claude import ClaudeProvider   # noqa: E402
+from core import Conversation, get_provider, get_settings  # noqa: E402
+from core.providers import ChatMessage                     # noqa: E402
 
-MODEL = "claude-haiku-4-5"  # cheap; cache minimum ~4K tokens
+# Claude path uses cheap haiku (cacheable ~4K min); other providers use their default model.
+# Note: prompt caching is a Claude feature — on OpenRouter the cache flags are ignored and
+# the demo prints its "no cache read" branch, which is expected.
+MODEL = "claude-haiku-4-5" if get_settings().provider == "claude" else get_settings().default_model
 
 FACTS = (
     "AI-OS is an enterprise AI engineering platform. The current release is version 0.1.0. "
@@ -52,7 +54,7 @@ def main() -> None:
     if not settings.has_api_key:
         print("Set ANTHROPIC_API_KEY in .env to run this demo.")
         return
-    provider = ClaudeProvider()
+    provider = get_provider()
 
     # 1) BUDGET ------------------------------------------------------------- #
     hr("1) Token budget — measure the system prefix before sending  [CALM: Limit]")

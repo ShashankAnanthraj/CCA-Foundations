@@ -32,6 +32,14 @@ python mcp/echo_server/server.py  # now speaking MCP over stdio
 ## Servers (this repo)
 - `echo_server/` — tools + resource + prompt (Topics 06 & 07).
 
+## Consuming servers (client side)
+This folder holds servers we **author**. To let our agents **use** external MCP servers (GitHub,
+filesystem, docs, deploy…), see `core/mcp_client.py` — it reads `servers.json`, connects, and adapts
+each server's tools into the vendor-neutral `run_tools` loop. (The bridge lives in `core/`, not here,
+so this folder never needs an `__init__.py` that would shadow the installed `mcp` SDK on `sys.path`.)
+- `servers.json` — live manifest (git-ignored; may hold `${ENV}` secrets)
+- `servers.example.json` — committed template (copy it to `servers.json`)
+
 ## Security (always)
 Validate every tool input; expose the minimum surface; don't trust client-supplied paths/URLs; keep
 secrets out of the server code (env vars only). See Topic 07 for auth, vaults, and remote servers.

@@ -20,11 +20,21 @@ except ImportError:  # pragma: no cover
     pass
 
 
+# Per-provider config: which env var holds the key, and the default model. Add a row to support
+# a new provider (also register its adapter in core.providers._ADAPTERS).
+_PROVIDERS = {
+    "claude": {"key_env": "ANTHROPIC_API_KEY", "default_model": "claude-opus-4-8"},
+    "openrouter": {"key_env": "OPENROUTER_API_KEY", "default_model": "google/gemma-4-31b-it:free"},
+    "groq": {"key_env": "GROQ_API_KEY", "default_model": "openai/gpt-oss-120b"},
+}
+
+
 @dataclass(frozen=True)
 class Settings:
     """Immutable runtime settings loaded from the environment."""
 
-    api_key: str | None
+    provider: str
+    api_key: str | None  # key for the SELECTED provider (None if unset)
     default_model: str
     max_tokens: int
 
@@ -36,8 +46,11 @@ class Settings:
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Return process-wide settings (cached). Reads env once."""
+    provider = os.environ.get("AI_OS_PROVIDER", "claude").lower()
+    meta = _PROVIDERS.get(provider, _PROVIDERS["claude"])
     return Settings(
-        api_key=os.environ.get("ANTHROPIC_API_KEY") or None,
-        default_model=os.environ.get("AI_OS_DEFAULT_MODEL", "claude-opus-4-8"),
+        provider=provider,
+        api_key=os.environ.get(meta["key_env"]) or None,
+        default_model=os.environ.get("AI_OS_DEFAULT_MODEL") or meta["default_model"],
         max_tokens=int(os.environ.get("AI_OS_MAX_TOKENS", "1024")),
     )
