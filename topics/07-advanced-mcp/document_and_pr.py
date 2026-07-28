@@ -51,7 +51,7 @@ from core import (  # noqa: E402
 DOC_TITLE = "MCP Client Bridge"
 DOC_OUT = ROOT / "runtime" / "generated-docs" / "MCP-CLIENT-BRIDGE.md"  # local dry-run artifact
 REPO_DOC_PATH = "docs/generated/MCP-CLIENT-BRIDGE.md"                    # path committed in the PR
-PR_BRANCH = "docs/mcp-client-bridge"
+PR_BRANCH = "docs/mcpclient"
 
 # Only these GitHub tools are exposed to the agent (least privilege — no merge/close/delete).
 GH_ALLOW = {
